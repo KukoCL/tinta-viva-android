@@ -4,7 +4,11 @@ public final class HitTest {
     private HitTest() { }
 
     public static boolean touches(Stroke stroke, float x, float y, float tolerance, int frame) {
-        float[] points = LineAnimation.pointsAt(stroke, frame);
+        return touches(stroke, x, y, tolerance, frame, true);
+    }
+
+    public static boolean touches(Stroke stroke, float x, float y, float tolerance, int frame, boolean strongMotion) {
+        float[] points = LineAnimation.pointsAt(stroke, frame, strongMotion);
         float[] widths = LineAnimation.widthsAt(stroke, frame);
         float padding = Math.max(0, tolerance);
         if (points.length == 2) {

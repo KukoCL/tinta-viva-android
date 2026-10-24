@@ -36,6 +36,15 @@ final class StudioIcon extends View {
         paint.setStyle(Paint.Style.STROKE);
         Path path = new Path();
         switch (kind) {
+            case "motion":
+                path.moveTo(3, 12); path.cubicTo(6, 2, 9, 2, 12, 12);
+                path.cubicTo(15, 22, 18, 22, 21, 12);
+                break;
+            case "redo":
+                path.moveTo(16, 5); path.lineTo(21, 10); path.lineTo(16, 15);
+                path.moveTo(20, 10); path.lineTo(10, 10);
+                path.cubicTo(2, 10, 2, 20, 10, 20);
+                break;
             case "new":
                 path.moveTo(4, 3); path.lineTo(14, 3); path.lineTo(20, 9);
                 path.lineTo(20, 21); path.lineTo(4, 21); path.close();

@@ -14,9 +14,11 @@ public final class DrawingDocument {
     private static final int MAX_UNDO = 128;
     private final ArrayList<Stroke> strokes = new ArrayList<>();
     private final ArrayDeque<Edit> history = new ArrayDeque<>();
+    private final ArrayDeque<Edit> redoHistory = new ArrayDeque<>();
     private long nextId = 1;
     private Layer activeLayer = Layer.SKETCH;
     private boolean lineArtOnly;
+    private boolean strongMotion = true;
 
     public Layer getActiveLayer() { return activeLayer; }
     public void setActiveLayer(Layer layer) {
@@ -30,6 +32,9 @@ public final class DrawingDocument {
     public List<Stroke> getStrokes() { return Collections.unmodifiableList(strokes); }
     public List<Stroke> snapshot() { return new ArrayList<>(strokes); }
     public boolean canUndo() { return !history.isEmpty(); }
+    public boolean canRedo() { return !redoHistory.isEmpty(); }
+    public boolean isStrongMotion() { return strongMotion; }
+    public void setStrongMotion(boolean strong) { strongMotion = strong; }
     public boolean hasAnimatedStrokes() {
         for (Stroke stroke : strokes) if (stroke.layer == Layer.LINE_ART) return true;
         return false;
@@ -46,7 +51,7 @@ public final class DrawingDocument {
     public boolean eraseAt(float x, float y, float tolerance, int displayedFrame) {
         for (int i = strokes.size() - 1; i >= 0; i--) {
             Stroke stroke = strokes.get(i);
-            if (stroke.layer == activeLayer && HitTest.touches(stroke, x, y, tolerance, displayedFrame)) {
+            if (stroke.layer == activeLayer && HitTest.touches(stroke, x, y, tolerance, displayedFrame, strongMotion)) {
                 strokes.remove(i);
                 remember(new Edit(false, stroke, i));
                 return true;
@@ -60,6 +65,16 @@ public final class DrawingDocument {
         if (edit == null) return false;
         if (edit.wasAdded) strokes.remove(edit.stroke);
         else strokes.add(edit.index, edit.stroke);
+        redoHistory.addLast(edit);
+        return true;
+    }
+
+    public boolean redo() {
+        Edit edit = redoHistory.pollLast();
+        if (edit == null) return false;
+        if (edit.wasAdded) strokes.add(edit.index, edit.stroke);
+        else strokes.remove(edit.stroke);
+        history.addLast(edit);
         return true;
     }
 
@@ -67,6 +82,7 @@ public final class DrawingDocument {
     public void clear() {
         strokes.clear();
         history.clear();
+        redoHistory.clear();
         nextId = 1;
     }
 
@@ -84,9 +100,11 @@ public final class DrawingDocument {
         strokes.addAll(savedStrokes);
         nextId = highestId + 1;
         history.clear();
+        redoHistory.clear();
     }
 
     private void remember(Edit edit) {
+        redoHistory.clear();
         history.addLast(edit);
         if (history.size() > MAX_UNDO) history.removeFirst();
     }

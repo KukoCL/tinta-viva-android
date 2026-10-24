@@ -4,6 +4,7 @@ import android.app.AlertDialog;
 import android.graphics.Rect;
 import android.os.Looper;
 import android.view.View;
+import android.widget.PopupMenu;
 
 import com.kukocl.tintaviva.core.Layer;
 
@@ -17,6 +18,7 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowAlertDialog;
+import org.robolectric.shadows.ShadowPopupMenu;
 
 import java.util.Collections;
 
@@ -89,7 +91,7 @@ public class MainActivityTest {
         assertTrue(canvas.width() >= 900);
         assertTrue(canvas.height() >= 640);
         for (int id : new int[]{R.id.layer_sketch, R.id.layer_line_art, R.id.layer_line_art_only,
-                R.id.tool_brush, R.id.tool_eraser, R.id.tool_color}) {
+                R.id.action_motion, R.id.tool_brush, R.id.tool_eraser, R.id.tool_color}) {
             assertTrue("Los controles deben quedar a la derecha del lienzo",
                     bounds(activity.findViewById(id)).left >= canvas.right);
         }
@@ -98,7 +100,11 @@ public class MainActivityTest {
     @Test public void newDrawingAndUndoHaveSeparateTouchTargets() {
         layoutAt(360, 640);
         Rect undo = bounds(activity.findViewById(R.id.action_undo));
+        Rect redo = bounds(activity.findViewById(R.id.action_redo));
         Rect fresh = bounds(activity.findViewById(R.id.action_new_drawing));
+        assertEquals(4, redo.left - undo.right);
+        assertEquals(48, redo.width());
+        assertTrue("Nuevo dibujo también debe quedar separado de Rehacer", fresh.left - redo.right >= 20);
         assertTrue("Debe haber espacio entre Deshacer y Nuevo dibujo", fresh.left - undo.right >= 20);
         assertEquals(48, fresh.width());
         assertEquals(48, fresh.height());
@@ -130,6 +136,7 @@ public class MainActivityTest {
         assertFalse(dialog.isShowing());
         assertTrue(session.document.getStrokes().isEmpty());
         assertFalse(session.document.canUndo());
+        assertFalse(session.document.canRedo());
         assertFalse(session.document.undo());
         assertFalse(session.document.isLineArtOnly());
         assertEquals(Layer.SKETCH, session.document.getActiveLayer());
@@ -137,6 +144,7 @@ public class MainActivityTest {
         assertTrue(activity.findViewById(R.id.layer_sketch).isSelected());
         assertTrue(activity.findViewById(R.id.tool_brush).isSelected());
         assertFalse(activity.findViewById(R.id.action_undo).isEnabled());
+        assertFalse(activity.findViewById(R.id.action_redo).isEnabled());
         assertFalse(session.getSharedPreferences("studio", 0).getBoolean("lineArtOnly", true));
         assertFalse(session.getSharedPreferences("studio", 0).getBoolean("eraser", true));
     }
@@ -147,6 +155,81 @@ public class MainActivityTest {
         ShadowAlertDialog.getLatestAlertDialog().cancel();
         assertEquals(2, session.document.getStrokes().size());
         assertTrue(session.document.canUndo());
+    }
+
+    @Test @Config(qualifiers = "w320dp-h568dp-port-mdpi")
+    public void allTopControlsStillFitOnANarrowPhone() {
+        assertPortraitLayout(320, 568);
+        for (int id : new int[]{R.id.action_undo, R.id.action_redo, R.id.action_new_drawing, R.id.action_motion}) {
+            Rect button = bounds(activity.findViewById(id));
+            assertTrue(button.left >= 8);
+            assertTrue(button.right <= 312);
+            assertEquals(48, button.width());
+            assertEquals(48, button.height());
+        }
+    }
+
+    @Test public void redoButtonRestoresTheUndoneStrokeAndUpdatesBothButtons() {
+        session.document.addStroke(0xff123456, 12, new float[]{100, 100});
+        activity.findViewById(R.id.layer_sketch).performClick();
+        View undo = activity.findViewById(R.id.action_undo), redo = activity.findViewById(R.id.action_redo);
+        assertTrue(undo.isEnabled());
+        assertFalse(redo.isEnabled());
+        undo.performClick();
+        assertTrue(session.document.getStrokes().isEmpty());
+        assertFalse(undo.isEnabled());
+        assertTrue(redo.isEnabled());
+        redo.performClick();
+        assertEquals(1, session.document.getStrokes().size());
+        assertEquals(0xff123456, session.document.getStrokes().get(0).color);
+        assertTrue(undo.isEnabled());
+        assertFalse(redo.isEnabled());
+    }
+
+    @Test public void motionPanelChangesOnlyMotionAndPreservesRedo() {
+        prepareDrawing();
+        activity.findViewById(R.id.action_undo).performClick();
+        assertTrue(session.document.canRedo());
+        PopupMenu menu = openMotionPanel();
+        assertEquals(2, menu.getMenu().size());
+        assertTrue(menu.getMenu().findItem(R.id.motion_strong).isChecked());
+        assertTrue(menu.getMenu().performIdentifierAction(R.id.motion_soft, 0));
+        menu.dismiss();
+        assertFalse(session.document.isStrongMotion());
+        assertFalse(session.getSharedPreferences("studio", 0).getBoolean("strongMotion", true));
+        assertEquals(1, session.document.getStrokes().size());
+        assertTrue(session.document.canRedo());
+        assertTrue(session.document.isLineArtOnly());
+        assertTrue(activity.findViewById(R.id.tool_eraser).isSelected());
+        assertEquals(3, session.viewport.getZoom(), 0);
+        activity.findViewById(R.id.action_redo).performClick();
+        assertEquals(2, session.document.getStrokes().size());
+        menu = openMotionPanel();
+        assertTrue(menu.getMenu().findItem(R.id.motion_soft).isChecked());
+        assertFalse(menu.getMenu().findItem(R.id.motion_strong).isChecked());
+        assertTrue(menu.getMenu().performIdentifierAction(R.id.motion_strong, 0));
+        menu.dismiss();
+        assertTrue(session.document.isStrongMotion());
+    }
+
+    @Test public void motionSelectionSurvivesActivityRecreation() {
+        PopupMenu menu = openMotionPanel();
+        assertTrue(menu.getMenu().performIdentifierAction(R.id.motion_soft, 0));
+        menu.dismiss();
+        controller.recreate();
+        activity = controller.get();
+        assertFalse(session.document.isStrongMotion());
+        menu = openMotionPanel();
+        assertTrue(menu.getMenu().findItem(R.id.motion_soft).isChecked());
+        menu.dismiss();
+    }
+
+    private PopupMenu openMotionPanel() {
+        layoutAt(360, 640);
+        activity.findViewById(R.id.action_motion).performClick();
+        PopupMenu menu = ShadowPopupMenu.getLatestPopupMenu();
+        assertNotNull(menu);
+        return menu;
     }
 
     private void prepareDrawing() {
@@ -163,7 +246,7 @@ public class MainActivityTest {
         Rect canvas = bounds(activity.findViewById(R.id.drawing_canvas));
         assertTrue("El lienzo debe aprovechar todo el ancho", canvas.width() >= width - 24);
         assertTrue("El lienzo debe ocupar la mayor parte de la altura", canvas.height() >= height * .6f);
-        for (int id : new int[]{R.id.layer_sketch, R.id.layer_line_art, R.id.layer_line_art_only}) {
+        for (int id : new int[]{R.id.layer_sketch, R.id.layer_line_art, R.id.layer_line_art_only, R.id.action_motion}) {
             assertTrue(bounds(activity.findViewById(id)).bottom <= canvas.top);
         }
         for (int id : new int[]{R.id.tool_brush, R.id.tool_eraser, R.id.tool_color}) {

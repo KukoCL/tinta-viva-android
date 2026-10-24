@@ -2,7 +2,7 @@ package com.kukocl.tintaviva.core;
 
 import java.util.Arrays;
 
-/** Eight repeating drawings at 8 fps, with pronounced movement and irregular local widths. */
+/** Eight repeating drawings at 8 fps, with selectable movement and irregular local widths. */
 public final class LineAnimation {
     public static final int FRAME_COUNT = 8;
     public static final long FRAME_MS = 125;
@@ -16,12 +16,17 @@ public final class LineAnimation {
     }
 
     public static float[] pointsAt(Stroke stroke, int frame) {
+        return pointsAt(stroke, frame, true);
+    }
+
+    public static float[] pointsAt(Stroke stroke, int frame, boolean strongMotion) {
         float[] points = stroke.copyPoints();
         if (stroke.layer == Layer.SKETCH) return points;
         int wrappedFrame = Math.floorMod(frame, FRAME_COUNT);
         double seed = (stroke.id * 0.754877666) % (Math.PI * 2);
         double phase = wrappedFrame * Math.PI * 2 / FRAME_COUNT;
-        float amplitude = Math.min(MAX_DISPLACEMENT, 4.8f + stroke.width * .1f);
+        float amplitude = strongMotion ? Math.min(MAX_DISPLACEMENT, 4.8f + stroke.width * .1f)
+                : Math.min(3.2f, 1.9f + stroke.width * .035f);
         float arcLength = 0;
         float previousX = points[0], previousY = points[1];
         for (int i = 0; i < points.length; i += 2) {

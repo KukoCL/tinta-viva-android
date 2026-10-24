@@ -9,10 +9,13 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.Menu;
 import android.view.View;
 import android.view.WindowInsets;
 import android.widget.LinearLayout;
+import android.widget.PopupMenu;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -34,6 +37,7 @@ public final class MainActivity extends Activity {
     private DrawingView drawingView;
     private SharedPreferences preferences;
     private LinearLayout sketchCard, lineCard, onlyCard, brushButton, eraserButton, colorButton, undoButton;
+    private LinearLayout redoButton, motionButton;
     private TextView sizeValue;
     private StudioIcon colorIcon;
     private int selectedColor;
@@ -41,6 +45,7 @@ public final class MainActivity extends Activity {
     private boolean erasing;
     private boolean wasSaveErrorShown;
     private AlertDialog newDrawingDialog;
+    private PopupMenu motionMenu;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -78,6 +83,7 @@ public final class MainActivity extends Activity {
         drawingView.setBrushColor(selectedColor);
         drawingView.setBrushWidth(brushWidth);
         drawingView.setErasing(erasing);
+        drawingView.setStrongMotion(preferences.getBoolean("strongMotion", true));
         drawingView.setListener(() -> {
             updateControls();
             session.store.save(document.snapshot());
@@ -122,6 +128,8 @@ public final class MainActivity extends Activity {
         title.setPadding(dp(10), 0, 0, 0);
         TextView name = text("Tinta Viva", 22, INK, true);
         name.setTypeface(Typeface.create("sans-serif-rounded", Typeface.BOLD));
+        name.setSingleLine(true);
+        name.setAutoSizeTextTypeUniformWithConfiguration(16, 22, 1, TypedValue.COMPLEX_UNIT_SP);
         title.addView(name);
         header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
         undoButton = iconButton("undo", "Deshacer");
@@ -136,6 +144,20 @@ public final class MainActivity extends Activity {
         });
         undoButton.setContentDescription("Deshacer la última acción, también si fue borrar un trazo");
         header.addView(undoButton, params(48, 48));
+        redoButton = iconButton("redo", "Rehacer");
+        redoButton.setId(R.id.action_redo);
+        redoButton.setOnClickListener(view -> {
+            drawingView.cancelPending();
+            if (document.redo()) {
+                drawingView.documentChanged();
+                updateControls();
+                session.store.save(document.snapshot());
+            }
+        });
+        redoButton.setContentDescription("Rehacer la última acción deshecha, también si fue borrar un trazo");
+        LinearLayout.LayoutParams redoParams = params(48, 48);
+        redoParams.leftMargin = dp(4);
+        header.addView(redoButton, redoParams);
         LinearLayout newDrawingButton = iconButton("new", "Nuevo dibujo");
         newDrawingButton.setId(R.id.action_new_drawing);
         newDrawingButton.setOnClickListener(view -> confirmNewDrawing());
@@ -143,6 +165,25 @@ public final class MainActivity extends Activity {
         newDrawingParams.leftMargin = dp(20);
         header.addView(newDrawingButton, newDrawingParams);
         return header;
+    }
+
+    private void showMotionPanel(View anchor) {
+        drawingView.cancelPending();
+        if (motionMenu != null) motionMenu.dismiss();
+        motionMenu = new PopupMenu(this, anchor, Gravity.END);
+        Menu menu = motionMenu.getMenu();
+        menu.add(1, R.id.motion_soft, 0, "Movimiento suave").setChecked(!document.isStrongMotion());
+        menu.add(1, R.id.motion_strong, 1, "Movimiento intenso").setChecked(document.isStrongMotion());
+        menu.setGroupCheckable(1, true, true);
+        motionMenu.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() != R.id.motion_soft && item.getItemId() != R.id.motion_strong) return false;
+            boolean strong = item.getItemId() == R.id.motion_strong;
+            drawingView.setStrongMotion(strong);
+            preferences.edit().putBoolean("strongMotion", strong).apply();
+            updateControls();
+            return true;
+        });
+        motionMenu.show();
     }
 
     private void confirmNewDrawing() {
@@ -179,6 +220,12 @@ public final class MainActivity extends Activity {
             if (card != onlyCard) cardParams.rightMargin = dp(4);
             row.addView(card, cardParams);
         }
+        motionButton = iconButton("motion", "Movimiento de las líneas");
+        motionButton.setId(R.id.action_motion);
+        motionButton.setOnClickListener(this::showMotionPanel);
+        LinearLayout.LayoutParams motionParams = params(48, 48);
+        motionParams.leftMargin = dp(8);
+        row.addView(motionButton, motionParams);
         LinearLayout.LayoutParams layerParams = params(-1, 48);
         layerParams.bottomMargin = dp(4);
         parent.addView(row, layerParams);
@@ -293,6 +340,9 @@ public final class MainActivity extends Activity {
         colorButton.setContentDescription("Elegir color. Color actual " + hex(selectedColor));
         undoButton.setEnabled(document.canUndo());
         undoButton.setAlpha(document.canUndo() ? 1 : .35f);
+        redoButton.setEnabled(document.canRedo());
+        redoButton.setAlpha(document.canRedo() ? 1 : .35f);
+        motionButton.setContentDescription("Movimiento de las líneas: " + (document.isStrongMotion() ? "intenso" : "suave"));
     }
 
     private void styleSelection(LinearLayout view, boolean selected) {
@@ -352,6 +402,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         if (newDrawingDialog != null) newDrawingDialog.dismiss();
+        if (motionMenu != null) motionMenu.dismiss();
         super.onDestroy();
     }
 }

@@ -77,6 +77,13 @@ public final class DrawingView extends View {
     public void setBrushColor(int color) { brushColor = color; }
     public void setBrushWidth(float width) { brushWidth = width; }
     public void setErasing(boolean erasing) { cancelPending(); this.erasing = erasing; }
+    public void setStrongMotion(boolean strong) {
+        if (document.isStrongMotion() == strong) return;
+        cancelPending();
+        document.setStrongMotion(strong);
+        pathCache.clear();
+        invalidate();
+    }
     public void layerChanged() { cancelPending(); invalidate(); }
     public void setAnimationAllowed(boolean allowed) {
         animationAllowed = allowed;
@@ -151,7 +158,7 @@ public final class DrawingView extends View {
             }
             int index = layer == Layer.LINE_ART ? displayedFrame : 0;
             if (frames[index] == null) {
-                float[] points = LineAnimation.pointsAt(stroke, index);
+                float[] points = LineAnimation.pointsAt(stroke, index, document.isStrongMotion());
                 frames[index] = layer == Layer.LINE_ART
                         ? AnimatedStrokePath.create(points, LineAnimation.widthsAt(stroke, index)) : makePath(points);
             }

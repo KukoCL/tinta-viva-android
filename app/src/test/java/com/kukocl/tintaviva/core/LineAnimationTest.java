@@ -11,6 +11,7 @@ public class LineAnimationTest {
         Stroke stroke = new Stroke(1, Layer.SKETCH, 0xff000000, 8, POINTS);
         for (int frame = 0; frame < LineAnimation.FRAME_COUNT; frame++) {
             assertArrayEquals(POINTS, LineAnimation.pointsAt(stroke, frame), 0);
+            assertArrayEquals(POINTS, LineAnimation.pointsAt(stroke, frame, false), 0);
         }
     }
 
@@ -39,6 +40,33 @@ public class LineAnimationTest {
             }
         }
         assertTrue("El movimiento debe superar claramente el límite anterior de 3,2 unidades", peak > 4);
+    }
+
+    @Test public void softMotionMatchesFramesFromTheOriginalAnimation() {
+        Stroke stroke = new Stroke(2, Layer.LINE_ART, 0xff000000, 12, POINTS);
+        assertArrayEquals(new float[]{101.705734f, 99.331863f, 105.537857f, 99.230415f,
+                        109.335808f, 101.098244f, 113.131905f, 102.950844f},
+                LineAnimation.pointsAt(stroke, 0, false), .0001f);
+        assertArrayEquals(new float[]{98.233032f, 101.545731f, 102.112564f, 101.653931f,
+                        106.041618f, 103.742996f, 110.035965f, 105.789154f},
+                LineAnimation.pointsAt(stroke, 3, false), .0001f);
+    }
+
+    @Test public void softMotionStaysWithinTheOriginalLimitAndStrongMotionKeepsTheCurrentDefault() {
+        for (float width : new float[]{2, 12, 32, 100}) {
+            Stroke stroke = new Stroke(2, Layer.LINE_ART, 0xff000000, width, POINTS);
+            for (int frame = 0; frame < LineAnimation.FRAME_COUNT; frame++) {
+                float[] soft = LineAnimation.pointsAt(stroke, frame, false);
+                float[] strong = LineAnimation.pointsAt(stroke, frame, true);
+                assertArrayEquals(LineAnimation.pointsAt(stroke, frame), strong, 0);
+                for (int i = 0; i < soft.length; i++) {
+                    assertTrue(Math.abs(soft[i] - POINTS[i]) <= 3.2001f);
+                    assertTrue(Math.abs(soft[i] - POINTS[i]) <= Math.abs(strong[i] - POINTS[i]) + .0001f);
+                }
+            }
+            assertArrayEquals(LineAnimation.pointsAt(stroke, 0, false),
+                    LineAnimation.pointsAt(stroke, LineAnimation.FRAME_COUNT, false), 0);
+        }
     }
 
     @Test public void strokesHaveDistinctDeterministicMotion() {
