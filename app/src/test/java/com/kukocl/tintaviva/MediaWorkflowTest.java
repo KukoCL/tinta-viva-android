@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.os.Looper;
 import android.view.View;
 import android.widget.PopupMenu;
+import androidx.core.content.FileProvider;
 
 import com.kukocl.tintaviva.core.Layer;
 
@@ -25,11 +26,13 @@ import org.robolectric.annotation.GraphicsMode;
 import org.robolectric.shadows.ShadowActivity;
 import org.robolectric.shadows.ShadowAlertDialog;
 import org.robolectric.shadows.ShadowPopupMenu;
+import org.robolectric.util.ReflectionHelpers;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.*;
@@ -45,6 +48,8 @@ public class MediaWorkflowTest {
 
     @Before public void setUp() {
         session = (TintaVivaApp) RuntimeEnvironment.getApplication();
+        // Robolectric assigns a new cache directory per test; Android keeps one per install.
+        ((Map<?, ?>) ReflectionHelpers.getStaticField(FileProvider.class, "sCache")).clear();
         controller = Robolectric.buildActivity(MainActivity.class).setup();
         activity = controller.get();
     }

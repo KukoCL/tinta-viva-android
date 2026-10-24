@@ -60,7 +60,7 @@ public class GifExporterTest {
 
     @Test public void snapshotKeepsTheCapturedImageOpacityAndStrokesAfterTheEditorChanges() throws Exception {
         DrawingDocument document = new DrawingDocument();
-        document.addStroke(Color.BLUE, 150, new float[]{200, 675, 880, 675});
+        document.addStroke(Color.BLUE, 100, new float[]{200, 675, 880, 675});
         Bitmap image = Bitmap.createBitmap(20, 20, Bitmap.Config.ARGB_8888);
         image.eraseColor(Color.RED);
         document.setActiveLayer(Layer.LINE_ART);
@@ -68,8 +68,8 @@ public class GifExporterTest {
         document.clear();
         document.showOnlyLineArt();
         try (GifReader frame = new GifReader(encode(snapshot))) {
-            assertEquals(Color.rgb(178, 178, 255), frame.pixel(0, 108, 135));
-            assertEquals(Color.rgb(255, 178, 178), frame.pixel(0, 108, 70));
+            assertBlendedColor(Color.rgb(178, 178, 255), frame.pixel(0, 108, 135));
+            assertBlendedColor(Color.rgb(255, 178, 178), frame.pixel(0, 108, 70));
         }
         GifExporter.Snapshot hidden = new GifExporter.Snapshot(document, image);
         try (GifReader empty = new GifReader(encode(hidden))) {
@@ -90,6 +90,13 @@ public class GifExporterTest {
             if (found != null) return found;
         }
         return null;
+    }
+
+    private void assertBlendedColor(int expected, int actual) {
+        assertEquals(Color.red(expected), Color.red(actual), 1);
+        assertEquals(Color.green(expected), Color.green(actual), 1);
+        assertEquals(Color.blue(expected), Color.blue(actual), 1);
+        assertEquals(255, Color.alpha(actual));
     }
 
     /** Android's compile classpath omits desktop APIs; the independent decoder runs on the test JDK. */

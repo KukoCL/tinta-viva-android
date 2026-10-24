@@ -43,8 +43,8 @@ public class DrawingRendererTest {
         DrawingDocument document = document();
         document.setActiveLayer(Layer.LINE_ART);
         Bitmap result = render(document, reference());
-        assertEquals(Color.rgb(178, 178, 255), result.getPixel(54, 67));
-        assertEquals(Color.rgb(255, 178, 178), result.getPixel(54, 35));
+        assertBlendedColor(Color.rgb(178, 178, 255), result.getPixel(54, 67));
+        assertBlendedColor(Color.rgb(255, 178, 178), result.getPixel(54, 35));
     }
 
     @Test public void lineArtOnlyHidesBothTheImageAndSketchStrokes() {
@@ -71,5 +71,13 @@ public class DrawingRendererTest {
         new DrawingRenderer().draw(canvas, document.getStrokes(), reference, document.sketchOpacity(),
                 document.isStrongMotion(), 0);
         return bitmap;
+    }
+
+    private void assertBlendedColor(int expected, int actual) {
+        // Skia's layer compositing can round a channel by one 8-bit step.
+        assertEquals(Color.red(expected), Color.red(actual), 1);
+        assertEquals(Color.green(expected), Color.green(actual), 1);
+        assertEquals(Color.blue(expected), Color.blue(actual), 1);
+        assertEquals(255, Color.alpha(actual));
     }
 }
