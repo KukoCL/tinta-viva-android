@@ -37,24 +37,34 @@ final class AnimatedStrokePath {
             nx[i] = -dy / length;
             ny[i] = dx / length;
         }
-        path.moveTo(points[0] + nx[0] * radii[0], points[1] + ny[0] * radii[0]);
-        for (int i = 1; i < count - 1; i++) join(path, points, radii, nx, ny, i, 1, false);
-        int last = count - 1;
-        path.lineTo(points[last * 2] + nx[last - 1] * radii[last],
-                points[last * 2 + 1] + ny[last - 1] * radii[last]);
-        arc(path, points[last * 2], points[last * 2 + 1], radii[last],
-                angle(nx[last - 1], ny[last - 1]), -180);
-        for (int i = count - 2; i > 0; i--) join(path, points, radii, nx, ny, i, -1, true);
-        path.lineTo(points[0] - nx[0] * radii[0], points[1] - ny[0] * radii[0]);
-        arc(path, points[0], points[1], radii[0], angle(-nx[0], -ny[0]), -180);
-        path.close();
-        // A near-180-degree reversal is a round cusp, rather than a very long miter.
+        // Split hairpin turns into overlapping round-capped contours. This prevents
+        // their two offset edges crossing and leaving a triangular hole near the turn.
+        int start = 0;
         for (int i = 1; i < count - 1; i++) {
             if (nx[i - 1] * nx[i] + ny[i - 1] * ny[i] < -.95f) {
-                path.addCircle(points[i * 2], points[i * 2 + 1], radii[i], Path.Direction.CCW);
+                ribbon(path, points, radii, nx, ny, start, i);
+                start = i;
             }
         }
+        ribbon(path, points, radii, nx, ny, start, count - 1);
         return path;
+    }
+
+    private static void ribbon(Path path, float[] points, float[] radii, float[] nx, float[] ny,
+                               int start, int end) {
+        path.moveTo(points[start * 2] + nx[start] * radii[start],
+                points[start * 2 + 1] + ny[start] * radii[start]);
+        for (int i = start + 1; i < end; i++) join(path, points, radii, nx, ny, i, 1, false);
+        path.lineTo(points[end * 2] + nx[end - 1] * radii[end],
+                points[end * 2 + 1] + ny[end - 1] * radii[end]);
+        arc(path, points[end * 2], points[end * 2 + 1], radii[end],
+                angle(nx[end - 1], ny[end - 1]), -180);
+        for (int i = end - 1; i > start; i--) join(path, points, radii, nx, ny, i, -1, true);
+        path.lineTo(points[start * 2] - nx[start] * radii[start],
+                points[start * 2 + 1] - ny[start] * radii[start]);
+        arc(path, points[start * 2], points[start * 2 + 1], radii[start],
+                angle(-nx[start], -ny[start]), -180);
+        path.close();
     }
 
     private static void join(Path path, float[] points, float[] radii, float[] nx, float[] ny,

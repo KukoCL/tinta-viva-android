@@ -39,6 +39,7 @@ public class AnimatedStrokePathTest {
     @Test public void reversingDirectionKeepsARoundCapWithoutHoles() {
         Bitmap image = render(new float[]{100, 100, 200, 100, 100, 100}, new float[]{12, 12, 12});
         assertEquals(Color.BLACK, image.getPixel(150, 100));
+        assertEquals(Color.BLACK, image.getPixel(190, 100));
         assertEquals(Color.BLACK, image.getPixel(204, 100));
         assertEquals(Color.WHITE, image.getPixel(208, 100));
     }
