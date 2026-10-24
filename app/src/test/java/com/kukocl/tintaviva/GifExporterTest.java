@@ -14,13 +14,11 @@ import org.robolectric.annotation.Config;
 import org.robolectric.annotation.GraphicsMode;
 import org.w3c.dom.Node;
 
-import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.util.Arrays;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageReader;
-import javax.imageio.stream.ImageInputStream;
+import java.util.Iterator;
 
 import static org.junit.Assert.*;
 
@@ -34,32 +32,29 @@ public class GifExporterTest {
         document.addStroke(Color.BLACK, 50, new float[]{150, 300, 400, 400, 800, 300});
         byte[] gif = encode(new GifExporter.Snapshot(document, null));
         assertEquals("GIF89a", new String(gif, 0, 6, java.nio.charset.StandardCharsets.US_ASCII));
-        try (ImageInputStream input = ImageIO.createImageInputStream(new ByteArrayInputStream(gif))) {
-            ImageReader reader = ImageIO.getImageReadersByFormatName("gif").next();
-            try {
-                reader.setInput(input);
-                assertEquals(8, reader.getNumImages(true));
-                assertEquals(216, reader.getWidth(0));
-                assertEquals(270, reader.getHeight(0));
+        try (GifReader reader = new GifReader(gif)) {
+                assertEquals(8, reader.count());
+                assertEquals(216, reader.width());
+                assertEquals(270, reader.height());
                 int delay = 0;
                 boolean changed = false;
-                int[] first = reader.read(0).getRGB(0, 0, 216, 270, null, 0, 216);
+                int[] first = reader.pixels(0);
                 for (int frame = 0; frame < 8; frame++) {
-                    Node tree = reader.getImageMetadata(frame).getAsTree("javax_imageio_gif_image_1.0");
+                    Node tree = reader.metadata(frame);
                     Node control = find(tree, "GraphicControlExtension");
                     delay += Integer.parseInt(control.getAttributes().getNamedItem("delayTime").getNodeValue());
-                    int[] pixels = reader.read(frame).getRGB(0, 0, 216, 270, null, 0, 216);
+                    int[] pixels = reader.pixels(frame);
                     if (!Arrays.equals(first, pixels)) changed = true;
                     if (frame == 0) {
-                        javax.imageio.metadata.IIOMetadataNode loop = (javax.imageio.metadata.IIOMetadataNode)
-                                find(tree, "ApplicationExtension");
-                        assertEquals("NETSCAPE", loop.getAttribute("applicationID"));
-                        assertArrayEquals(new byte[]{1, 0, 0}, (byte[]) loop.getUserObject());
+                        Node loop = find(tree, "ApplicationExtension");
+                        assertEquals("NETSCAPE", loop.getAttributes().getNamedItem("applicationID").getNodeValue());
+                        byte[] looping = (byte[]) Class.forName("javax.imageio.metadata.IIOMetadataNode")
+                                .getMethod("getUserObject").invoke(loop);
+                        assertArrayEquals(new byte[]{1, 0, 0}, looping);
                     }
                 }
                 assertEquals(100, delay);
                 assertTrue("El GIF debe contener animación real", changed);
-            } finally { reader.dispose(); }
         }
     }
 
@@ -72,12 +67,14 @@ public class GifExporterTest {
         GifExporter.Snapshot snapshot = new GifExporter.Snapshot(document, image);
         document.clear();
         document.showOnlyLineArt();
-        BufferedImage frame = ImageIO.read(new ByteArrayInputStream(encode(snapshot)));
-        assertEquals(Color.rgb(178, 178, 255), frame.getRGB(108, 135));
-        assertEquals(Color.rgb(255, 178, 178), frame.getRGB(108, 70));
+        try (GifReader frame = new GifReader(encode(snapshot))) {
+            assertEquals(Color.rgb(178, 178, 255), frame.pixel(0, 108, 135));
+            assertEquals(Color.rgb(255, 178, 178), frame.pixel(0, 108, 70));
+        }
         GifExporter.Snapshot hidden = new GifExporter.Snapshot(document, image);
-        BufferedImage empty = ImageIO.read(new ByteArrayInputStream(encode(hidden)));
-        assertEquals(Color.WHITE, empty.getRGB(108, 70));
+        try (GifReader empty = new GifReader(encode(hidden))) {
+            assertEquals(Color.WHITE, empty.pixel(0, 108, 70));
+        }
     }
 
     private byte[] encode(GifExporter.Snapshot snapshot) throws Exception {
@@ -93,5 +90,46 @@ public class GifExporterTest {
             if (found != null) return found;
         }
         return null;
+    }
+
+    /** Android's compile classpath omits desktop APIs; the independent decoder runs on the test JDK. */
+    private static final class GifReader implements AutoCloseable {
+        private final Class<?> type = Class.forName("javax.imageio.ImageReader");
+        private final Class<?> imageType = Class.forName("java.awt.image.BufferedImage");
+        private final Object reader;
+        private final Closeable input;
+
+        GifReader(byte[] gif) throws Exception {
+            Class<?> io = Class.forName("javax.imageio.ImageIO");
+            Iterator<?> readers = (Iterator<?>) io.getMethod("getImageReadersByFormatName", String.class)
+                    .invoke(null, "gif");
+            reader = readers.next();
+            input = (Closeable) io.getMethod("createImageInputStream", Object.class)
+                    .invoke(null, new ByteArrayInputStream(gif));
+            type.getMethod("setInput", Object.class).invoke(reader, input);
+        }
+
+        int count() throws Exception { return (Integer) type.getMethod("getNumImages", boolean.class).invoke(reader, true); }
+        int width() throws Exception { return (Integer) type.getMethod("getWidth", int.class).invoke(reader, 0); }
+        int height() throws Exception { return (Integer) type.getMethod("getHeight", int.class).invoke(reader, 0); }
+
+        int[] pixels(int frame) throws Exception {
+            Object image = type.getMethod("read", int.class).invoke(reader, frame);
+            return (int[]) imageType.getMethod("getRGB", int.class, int.class, int.class, int.class,
+                    int[].class, int.class, int.class).invoke(image, 0, 0, width(), height(), null, 0, width());
+        }
+
+        int pixel(int frame, int x, int y) throws Exception { return pixels(frame)[y * width() + x]; }
+
+        Node metadata(int frame) throws Exception {
+            Object metadata = type.getMethod("getImageMetadata", int.class).invoke(reader, frame);
+            return (Node) Class.forName("javax.imageio.metadata.IIOMetadata")
+                    .getMethod("getAsTree", String.class).invoke(metadata, "javax_imageio_gif_image_1.0");
+        }
+
+        @Override public void close() throws Exception {
+            try { type.getMethod("dispose").invoke(reader); }
+            finally { input.close(); }
+        }
     }
 }
