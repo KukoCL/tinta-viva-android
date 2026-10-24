@@ -227,8 +227,8 @@ public final class MainActivity extends Activity {
         Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".exports", gif);
         Intent share = new Intent(Intent.ACTION_SEND).setType("image/gif")
                 .putExtra(Intent.EXTRA_STREAM, uri)
-                .setClipData(ClipData.newUri(getContentResolver(), "Tinta Viva", uri))
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        share.setClipData(ClipData.newUri(getContentResolver(), "Tinta Viva", uri));
         try { startActivity(Intent.createChooser(share, "Compartir GIF")); }
         catch (ActivityNotFoundException missing) {
             Toast.makeText(this, "No se encontró una aplicación para compartir el GIF.", Toast.LENGTH_LONG).show();
