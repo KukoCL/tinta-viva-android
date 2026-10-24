@@ -28,7 +28,7 @@ public final class DrawingDocument {
     }
     public void showOnlyLineArt() { activeLayer = Layer.LINE_ART; lineArtOnly = true; }
     public boolean isLineArtOnly() { return lineArtOnly; }
-    public float sketchOpacity() { return lineArtOnly ? 0 : activeLayer == Layer.LINE_ART ? .4f : 1f; }
+    public float sketchOpacity() { return lineArtOnly ? 0 : activeLayer == Layer.LINE_ART ? .3f : 1f; }
     public List<Stroke> getStrokes() { return Collections.unmodifiableList(strokes); }
     public List<Stroke> snapshot() { return new ArrayList<>(strokes); }
     public boolean canUndo() { return !history.isEmpty(); }

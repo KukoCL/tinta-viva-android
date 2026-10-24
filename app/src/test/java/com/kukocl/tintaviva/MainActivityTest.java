@@ -52,7 +52,7 @@ public class MainActivityTest {
         assertEquals(Layer.LINE_ART, session.document.getActiveLayer());
         assertTrue(activity.findViewById(R.id.layer_line_art_only).isSelected());
         activity.findViewById(R.id.layer_line_art).performClick();
-        assertEquals(.4f, session.document.sketchOpacity(), 0);
+        assertEquals(.3f, session.document.sketchOpacity(), 0);
         activity.findViewById(R.id.layer_sketch).performClick();
         assertEquals(1, session.document.sketchOpacity(), 0);
         assertEquals(1, session.document.getStrokes().size());
@@ -97,15 +97,15 @@ public class MainActivityTest {
         }
     }
 
-    @Test public void newDrawingAndUndoHaveSeparateTouchTargets() {
+    @Test public void fileMenuAndUndoHaveSeparateTouchTargets() {
         layoutAt(360, 640);
         Rect undo = bounds(activity.findViewById(R.id.action_undo));
         Rect redo = bounds(activity.findViewById(R.id.action_redo));
-        Rect fresh = bounds(activity.findViewById(R.id.action_new_drawing));
+        Rect fresh = bounds(activity.findViewById(R.id.action_file_menu));
         assertEquals(4, redo.left - undo.right);
         assertEquals(48, redo.width());
-        assertTrue("Nuevo dibujo también debe quedar separado de Rehacer", fresh.left - redo.right >= 20);
-        assertTrue("Debe haber espacio entre Deshacer y Nuevo dibujo", fresh.left - undo.right >= 20);
+        assertTrue("El menú debe quedar separado de Rehacer", fresh.left - redo.right >= 20);
+        assertTrue("Debe haber espacio entre Deshacer y el menú", fresh.left - undo.right >= 20);
         assertEquals(48, fresh.width());
         assertEquals(48, fresh.height());
     }
@@ -113,7 +113,7 @@ public class MainActivityTest {
     @Test public void cancellingNewDrawingPreservesBothLayersHistoryAndZoom() {
         prepareDrawing();
         float zoom = session.viewport.getZoom();
-        activity.findViewById(R.id.action_new_drawing).performClick();
+        chooseFileAction(R.id.action_new_drawing);
         AlertDialog dialog = ShadowAlertDialog.getLatestAlertDialog();
         assertTrue(dialog.isShowing());
         assertEquals(2, session.document.getStrokes().size());
@@ -129,7 +129,7 @@ public class MainActivityTest {
 
     @Test public void confirmingNewDrawingClearsBothLayersHistoryAndZoomAndSelectsSketchBrush() {
         prepareDrawing();
-        activity.findViewById(R.id.action_new_drawing).performClick();
+        chooseFileAction(R.id.action_new_drawing);
         AlertDialog dialog = ShadowAlertDialog.getLatestAlertDialog();
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
         shadowOf(Looper.getMainLooper()).idle();
@@ -151,7 +151,7 @@ public class MainActivityTest {
 
     @Test public void dismissingConfirmationAlsoPreservesTheDrawing() {
         prepareDrawing();
-        activity.findViewById(R.id.action_new_drawing).performClick();
+        chooseFileAction(R.id.action_new_drawing);
         ShadowAlertDialog.getLatestAlertDialog().cancel();
         assertEquals(2, session.document.getStrokes().size());
         assertTrue(session.document.canUndo());
@@ -160,7 +160,7 @@ public class MainActivityTest {
     @Test @Config(qualifiers = "w320dp-h568dp-port-mdpi")
     public void allTopControlsStillFitOnANarrowPhone() {
         assertPortraitLayout(320, 568);
-        for (int id : new int[]{R.id.action_undo, R.id.action_redo, R.id.action_new_drawing, R.id.action_motion}) {
+        for (int id : new int[]{R.id.action_undo, R.id.action_redo, R.id.action_file_menu, R.id.action_motion}) {
             Rect button = bounds(activity.findViewById(id));
             assertTrue(button.left >= 8);
             assertTrue(button.right <= 312);
@@ -230,6 +230,14 @@ public class MainActivityTest {
         PopupMenu menu = ShadowPopupMenu.getLatestPopupMenu();
         assertNotNull(menu);
         return menu;
+    }
+
+    private void chooseFileAction(int id) {
+        layoutAt(360, 640);
+        activity.findViewById(R.id.action_file_menu).performClick();
+        PopupMenu menu = ShadowPopupMenu.getLatestPopupMenu();
+        assertTrue(menu.getMenu().performIdentifierAction(id, 0));
+        menu.dismiss();
     }
 
     private void prepareDrawing() {

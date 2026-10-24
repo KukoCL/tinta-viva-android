@@ -1,10 +1,10 @@
 package com.kukocl.tintaviva;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.Path;
 import android.graphics.RectF;
 import android.os.SystemClock;
 import android.view.MotionEvent;
@@ -16,13 +16,7 @@ import com.kukocl.tintaviva.core.DrawingDocument;
 import com.kukocl.tintaviva.core.CanvasViewport;
 import com.kukocl.tintaviva.core.Layer;
 import com.kukocl.tintaviva.core.LineAnimation;
-import com.kukocl.tintaviva.core.Stroke;
 import com.kukocl.tintaviva.core.StrokeBuilder;
-
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
 
 public final class DrawingView extends View {
     public interface Listener { void onDrawingChanged(); }
@@ -32,7 +26,8 @@ public final class DrawingView extends View {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF paper = new RectF();
-    private final Map<Long, Path[]> pathCache = new HashMap<>();
+    private final DrawingRenderer renderer = new DrawingRenderer();
+    private Bitmap sketchImage;
     private final Runnable animate = this::invalidate;
     private Listener listener;
     private StrokeBuilder pending;
@@ -76,12 +71,13 @@ public final class DrawingView extends View {
     public void setListener(Listener listener) { this.listener = listener; }
     public void setBrushColor(int color) { brushColor = color; }
     public void setBrushWidth(float width) { brushWidth = width; }
+    public void setSketchImage(Bitmap image) { sketchImage = image; invalidate(); }
     public void setErasing(boolean erasing) { cancelPending(); this.erasing = erasing; }
     public void setStrongMotion(boolean strong) {
         if (document.isStrongMotion() == strong) return;
         cancelPending();
         document.setStrongMotion(strong);
-        pathCache.clear();
+        renderer.clear();
         invalidate();
     }
     public void layerChanged() { cancelPending(); invalidate(); }
@@ -93,9 +89,7 @@ public final class DrawingView extends View {
     }
 
     public void documentChanged() {
-        Set<Long> current = new HashSet<>();
-        for (Stroke stroke : document.getStrokes()) current.add(stroke.id);
-        pathCache.keySet().retainAll(current);
+        renderer.retain(document.getStrokes());
         invalidate();
     }
 
@@ -117,14 +111,14 @@ public final class DrawingView extends View {
         canvas.translate(paper.left, paper.top);
         canvas.scale(viewport.getScale(), viewport.getScale());
         if (document.sketchOpacity() > 0 && document.sketchOpacity() < 1) {
-            // Apply opacity to the composite layer, so overlapping sketch strokes stay at 40%.
+            // Fade the image and all sketch strokes together, including their overlaps.
             int sketchSave = canvas.saveLayerAlpha(0, 0, DrawingDocument.WIDTH,
                     DrawingDocument.HEIGHT, Math.round(document.sketchOpacity() * 255));
             drawLayer(canvas, Layer.SKETCH, 1);
             canvas.restoreToCount(sketchSave);
         } else if (document.sketchOpacity() == 1) drawLayer(canvas, Layer.SKETCH, 1);
         drawLayer(canvas, Layer.LINE_ART, 1);
-        if (document.getStrokes().isEmpty() && pending == null) {
+        if (document.getStrokes().isEmpty() && sketchImage == null && pending == null) {
             textPaint.setTextAlign(Paint.Align.CENTER);
             textPaint.setColor(Color.rgb(161, 168, 158));
             textPaint.setTextSize(38);
@@ -149,36 +143,15 @@ public final class DrawingView extends View {
     }
 
     private void drawLayer(Canvas canvas, Layer layer, float opacity) {
-        for (Stroke stroke : document.getStrokes()) {
-            if (stroke.layer != layer) continue;
-            Path[] frames = pathCache.get(stroke.id);
-            if (frames == null) {
-                frames = new Path[layer == Layer.LINE_ART ? LineAnimation.FRAME_COUNT : 1];
-                pathCache.put(stroke.id, frames);
-            }
-            int index = layer == Layer.LINE_ART ? displayedFrame : 0;
-            if (frames[index] == null) {
-                float[] points = LineAnimation.pointsAt(stroke, index, document.isStrongMotion());
-                frames[index] = layer == Layer.LINE_ART
-                        ? AnimatedStrokePath.create(points, LineAnimation.widthsAt(stroke, index)) : makePath(points);
-            }
-            configurePaint(stroke.color, stroke.width, opacity);
-            if (layer == Layer.LINE_ART) {
-                paint.setStyle(Paint.Style.FILL);
-                canvas.drawPath(frames[index], paint);
-            } else if (stroke.pointCount() == 1) {
-                float[] point = LineAnimation.pointsAt(stroke, index);
-                paint.setStyle(Paint.Style.FILL);
-                canvas.drawCircle(point[0], point[1], stroke.width / 2, paint);
-            } else canvas.drawPath(frames[index], paint);
-        }
+        if (layer == Layer.SKETCH) renderer.drawSketchImage(canvas, sketchImage);
+        renderer.drawLayer(canvas, document.getStrokes(), layer, document.isStrongMotion(), displayedFrame);
         if (pending != null && layer == document.getActiveLayer()) {
             float[] points = pending.preview();
             configurePaint(pendingColor, pendingWidth, opacity);
             if (points.length == 2) {
                 paint.setStyle(Paint.Style.FILL);
                 canvas.drawCircle(points[0], points[1], pendingWidth / 2, paint);
-            } else if (points.length > 2) canvas.drawPath(makePath(points), paint);
+            } else if (points.length > 2) canvas.drawPath(DrawingRenderer.makePath(points), paint);
         }
     }
 
@@ -187,15 +160,6 @@ public final class DrawingView extends View {
         paint.setColor(color);
         paint.setAlpha(Math.round(opacity * 255));
         paint.setStrokeWidth(width);
-    }
-
-    private static Path makePath(float[] points) {
-        Path path = new Path();
-        if (points.length == 0) return path;
-        path.moveTo(points[0], points[1]);
-        // Dense equal-distance samples with rounded joins also match the eraser geometry.
-        for (int i = 2; i < points.length; i += 2) path.lineTo(points[i], points[i + 1]);
-        return path;
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {

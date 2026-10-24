@@ -10,10 +10,10 @@ public class DrawingDocumentTest {
     private final DrawingDocument document = new DrawingDocument();
     private static final float[] LINE = {100, 100, 200, 100, 300, 100};
 
-    @Test public void selectingLineArtMakesSketchExactlyFortyPercentOpaque() {
+    @Test public void selectingLineArtMakesSketchExactlyThirtyPercentOpaque() {
         assertEquals(1f, document.sketchOpacity(), 0);
         document.setActiveLayer(Layer.LINE_ART);
-        assertEquals(.4f, document.sketchOpacity(), 0);
+        assertEquals(.3f, document.sketchOpacity(), 0);
         document.setActiveLayer(Layer.SKETCH);
         assertEquals(1f, document.sketchOpacity(), 0);
     }
@@ -35,7 +35,7 @@ public class DrawingDocumentTest {
         document.showOnlyLineArt();
         document.setActiveLayer(Layer.LINE_ART);
         assertFalse(document.isLineArtOnly());
-        assertEquals(.4f, document.sketchOpacity(), 0);
+        assertEquals(.3f, document.sketchOpacity(), 0);
         document.showOnlyLineArt();
         document.setActiveLayer(Layer.SKETCH);
         assertFalse(document.isLineArtOnly());

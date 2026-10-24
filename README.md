@@ -8,7 +8,7 @@ Una pequeña app nativa de Android para dibujar con líneas que parecen cobrar v
 - **Line art:** capa superior. Cada trazo comienza a moverse en cuanto levantas el dedo o el lápiz.
 - **Grosor vivo:** distintas zonas del mismo trazo se afinan y ensanchan de forma marcada e irregular mientras se mueve. La variación local alcanza como máximo un 55 % del grosor elegido. Las zonas cambian independientemente en cada fotograma, con transiciones suaves entre puntos vecinos.
 - **Fuerza del movimiento:** el botón de onda junto a las capas abre un panel pequeño con Movimiento suave (el nivel original) y Movimiento intenso (el más exagerado). Se aplica también a las líneas ya dibujadas y recuerda la elección al girar o volver a abrir la app. Solo cambia el desplazamiento: la variación irregular de grosor es exactamente la misma en ambos niveles. El nivel inicial es Intenso.
-- Al seleccionar **Line art**, el sketch se muestra al **40 % de opacidad**: 0 % sería invisible y 100 % completamente opaco. Al volver a Sketch recupera el 100 %.
+- Al seleccionar **Line art**, el sketch se muestra al **30 % de opacidad**: 0 % sería invisible y 100 % completamente opaco. Al volver a Sketch recupera el 100 %.
 - **Solo line art:** tercer botón que oculta el sketch y permite seguir dibujando en la capa superior. El sketch se conserva y vuelve a mostrarse al seleccionar las otras vistas.
 - Barra compacta con iconos de pincel, goma y color. El icono de paleta abre los colores predefinidos y el selector de cualquier color mediante tono, saturación, luminosidad o código hexadecimal.
 - Un solo tipo de pincel, con grosor ajustable.
@@ -16,16 +16,20 @@ Una pequeña app nativa de Android para dibujar con líneas que parecen cobrar v
 - **Zoom de 1× a 8×:** pellizca con dos dedos para ampliar o reducir. Mueve ambos dedos juntos para desplazar el lienzo ampliado. Pellizca hacia dentro hasta 1× para volver a ver la página completa.
 - Los gestos de dos dedos no dibujan ni borran. Si colocas el segundo dedo mientras un trazo está en curso, ese borrador de trazo se descarta y empieza la navegación. Al levantar los dedos, puedes iniciar un trazo nuevo normalmente.
 - **Deshacer y Rehacer:** botones contiguos para revertir y recuperar trazos nuevos o borrados, incluso después de cambiar de capa. Conservan hasta 128 acciones durante la sesión. Dibujar o borrar un trazo después de deshacer inicia una nueva secuencia y descarta las acciones pendientes de rehacer; cambiar de capa o movimiento las conserva.
-- **Nuevo dibujo:** botón de hoja con un signo + junto a Deshacer y Rehacer, separado del historial por 20 dp. Pide confirmación antes de borrar las dos capas y ambos historiales. Vuelve a Sketch, selecciona el pincel y muestra la página completa; conserva el color, el grosor y el nivel de movimiento elegidos. El lienzo vacío se guarda automáticamente.
+- **Menú de guardar:** el icono de disquete de la cabecera abre Guardar GIF / compartir, Importar imagen de sketch, Quitar imagen de sketch y Nuevo lienzo.
+- **Imagen de sketch:** selecciona un archivo de imagen. La app lo centra sin deformarlo debajo de los trazos del sketch, de modo que puedas dibujar encima. La imagen y los trazos se atenúan juntos al 30 % en Line art y se ocultan juntos en Solo line art. Quitar imagen conserva todos los trazos. Se guarda una copia privada de la imagen para recuperarla al volver a abrir la app.
+- **Nuevo lienzo:** está en el menú de guardar y pide confirmación antes de borrar la imagen, las dos capas y ambos historiales. Vuelve a Sketch, selecciona el pincel y muestra la página completa; conserva el color, el grosor y el nivel de movimiento elegidos. El lienzo vacío se guarda automáticamente.
 - Guardado automático de un dibujo en el dispositivo. Conserva las dos capas, los colores y la animación al volver a abrir la app.
 - Distribución adaptada a orientación vertical, horizontal y pantallas grandes.
 - En vertical, teléfonos y tablets usan todo el ancho para el lienzo, con las capas arriba y las herramientas abajo. El panel lateral se utiliza en horizontal a partir de 600 dp de ancho. Los botones de herramientas conservan su tamaño compacto de 48 dp.
 
 La versión **1.1.0** amplía el espacio disponible para el lienzo al retirar la línea de ayuda, compactar la cabecera y reunir las herramientas en una sola fila. El zoom y el desplazamiento no modifican el tamaño de los trazos guardados y se conservan durante la rotación de pantalla en la misma sesión.
 
+La versión **1.3.0** añade imágenes de referencia, exportación GIF y el menú de compartir de Android. El GIF contiene ocho fotogramas a 540 × 675, con un bucle de un segundo, fondo blanco, la fuerza de movimiento elegida y las capas visibles en el momento de exportar. Exporta la página completa, independientemente del zoom, sin controles ni mensajes del editor. Al terminar abre el menú de compartir para elegir la aplicación de destino.
+
 La versión **1.2.0** añade variación animada de grosor a cada zona del line art, incluidos los trazos ya guardados. El sketch conserva su grosor original. La goma tiene en cuenta el grosor local del fotograma visible.
 
-No requiere cuenta, conexión a Internet ni permisos de almacenamiento. El archivo se guarda en el espacio privado de la app. Esta primera versión trabaja con un solo lienzo; no incluye galería ni exportación de imágenes o vídeos. Los historiales de deshacer y rehacer se conservan al girar la pantalla y se reinician cuando Android termina el proceso.
+No requiere cuenta, conexión a Internet ni permisos generales de almacenamiento. Las imágenes se eligen con el selector de archivos de Android y se copian al espacio privado de la app. Trabaja con un solo lienzo y permite exportarlo como GIF animado; no incluye galería de dibujos ni exportación de vídeo. Los historiales de deshacer y rehacer se conservan al girar la pantalla y se reinician cuando Android termina el proceso.
 
 ## Compilar en Windows con Android Studio
 
@@ -77,7 +81,10 @@ Las geometrías se reutilizan entre fotogramas y se vuelven a calcular al cambia
 ```text
 app/src/main/java/com/kukocl/tintaviva/
   core/                 Documento, trazos, animación, goma, historial y zoom
-  DrawingView.java      Lienzo, renderizado y entrada táctil/lápiz
+  DrawingView.java      Lienzo y entrada táctil/lápiz
+  DrawingRenderer.java  Renderizado común del editor y el GIF
+  GifExporter.java      Ocho fotogramas del documento capturado
+  SketchImages.java     Importación limitada y copia privada de imágenes
   AnimatedStrokePath.java  Contorno del pincel con grosor variable
   MainActivity.java     Interfaz del estudio
   ColorPickerDialog.java
@@ -87,7 +94,7 @@ docs/PRUEBAS-MANUALES.md
 .github/workflows/android.yml
 ```
 
-Tecnología: Java 17, Android SDK 35, Android Gradle Plugin 8.7.3 y Gradle 8.9. La app no depende de librerías externas en tiempo de ejecución. JUnit y Robolectric se utilizan únicamente para las pruebas y no se incluyen en el APK.
+Tecnología: Java 17, Android SDK 35, Android Gradle Plugin 8.7.3 y Gradle 8.9. La exportación utiliza gifencoder 0.10.1 de Square (Apache 2.0), compatible con Android, y AndroidX Core 1.15.0 para compartir el GIF mediante FileProvider con acceso temporal de lectura. JUnit y Robolectric se utilizan únicamente para las pruebas y no se incluyen en el APK. La licencia de gifencoder se incluye en los assets de la app.
 
 ```powershell
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug
