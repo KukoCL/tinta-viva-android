@@ -6,9 +6,13 @@ import static org.junit.Assert.*;
 
 public class AnimatedWidthTest {
     private Stroke line() {
-        float[] points = new float[402];
-        for (int i = 0; i < 201; i++) { points[i * 2] = 100 + i * 4; points[i * 2 + 1] = 100; }
-        return new Stroke(7, Layer.LINE_ART, 0xff000000, 40, points);
+        return line(7, 201);
+    }
+
+    private Stroke line(long id, int count) {
+        float[] points = new float[count * 2];
+        for (int i = 0; i < count; i++) { points[i * 2] = 100 + i * 4; points[i * 2 + 1] = 100; }
+        return new Stroke(id, Layer.LINE_ART, 0xff000000, 40, points);
     }
 
     @Test public void eachFrameHasDifferentWidthsAlongTheSameStroke() {
@@ -16,7 +20,7 @@ public class AnimatedWidthTest {
         float[] widths = LineAnimation.widthsAt(stroke, 0);
         float min = Float.MAX_VALUE, max = 0;
         for (float width : widths) { min = Math.min(min, width); max = Math.max(max, width); }
-        assertTrue("El mismo trazo debe tener zonas finas y gruesas", max - min > stroke.width * .2f);
+        assertTrue("El mismo trazo debe tener zonas finas y gruesas más marcadas", max - min > stroke.width * .4f);
     }
 
     @Test public void widthAnimationChangesLocallyRatherThanScalingTheWholeStroke() {
@@ -28,12 +32,12 @@ public class AnimatedWidthTest {
         assertNotEquals(next[10] / first[10], next[90] / first[90], .01f);
     }
 
-    @Test public void allWidthsStayWithinTwentyTwoPercentAndRepeatWithoutDrift() {
+    @Test public void allWidthsStayWithinFiftyFivePercentAndRepeatWithoutDrift() {
         Stroke stroke = line();
         for (int frame = 0; frame < 1000; frame++) {
             for (float width : LineAnimation.widthsAt(stroke, frame)) {
-                assertTrue(width >= stroke.width * .78f - .001f);
-                assertTrue(width <= stroke.width * 1.22f + .001f);
+                assertTrue(width >= stroke.width * .45f - .001f);
+                assertTrue(width <= stroke.width * 1.55f + .001f);
             }
         }
         assertArrayEquals(LineAnimation.widthsAt(stroke, 0),
@@ -48,12 +52,45 @@ public class AnimatedWidthTest {
         }
     }
 
-    @Test public void widthWavesAreStableForSavedIdsAndDifferentBetweenStrokes() {
+    @Test public void irregularWidthsAreStableForSavedIdsAndDifferentBetweenStrokes() {
         Stroke a = line();
         Stroke restored = new Stroke(a.id, a.layer, a.color, a.width, a.copyPoints());
         Stroke other = new Stroke(a.id + 1, a.layer, a.color, a.width, a.copyPoints());
         assertArrayEquals(LineAnimation.widthsAt(a, 5), LineAnimation.widthsAt(restored, 5), 0);
         assertFalse(java.util.Arrays.equals(LineAnimation.widthsAt(a, 5), LineAnimation.widthsAt(other, 5)));
+    }
+
+    @Test public void widthPatternsDoNotAdvanceAsTheSameShapeAlongTheStroke() {
+        double totalCorrelation = 0;
+        int transitions = 0;
+        for (long id : new long[]{1, 7, 41}) {
+            Stroke stroke = line(id, 501);
+            float[][] frames = new float[LineAnimation.FRAME_COUNT][];
+            for (int frame = 0; frame < frames.length; frame++) frames[frame] = LineAnimation.widthsAt(stroke, frame);
+            for (int frame = 0; frame < frames.length; frame++) {
+                double best = -1;
+                // Even after shifting up to 64 units, the next frame should not reproduce
+                // the same width profile. The previous traveling waves score above .8.
+                for (int shift = -16; shift <= 16; shift++) {
+                    best = Math.max(best, correlation(frames[frame], frames[(frame + 1) % frames.length], shift));
+                }
+                totalCorrelation += best;
+                transitions++;
+            }
+        }
+        assertTrue("Las zonas anchas deben cambiar de forma irregular, sin avanzar como una onda",
+                totalCorrelation / transitions < .6);
+    }
+
+    @Test public void neighboringSamplesKeepSmoothWidthTransitionsInEveryFrame() {
+        Stroke stroke = line();
+        for (int frame = 0; frame < LineAnimation.FRAME_COUNT; frame++) {
+            float[] widths = LineAnimation.widthsAt(stroke, frame);
+            for (int i = 1; i < widths.length; i++) {
+                assertTrue("La variación irregular no debe crear saltos entre puntos vecinos",
+                        Math.abs(widths[i] - widths[i - 1]) < stroke.width * .12f);
+            }
+        }
     }
 
     @Test public void eraserIncludesAnExpandedPartOfTheVisibleStroke() {
@@ -95,5 +132,16 @@ public class AnimatedWidthTest {
         float length = (float) Math.hypot(dx, dy);
         return new float[]{points[sample * 2] - dy / length * distance,
                 points[sample * 2 + 1] + dx / length * distance};
+    }
+
+    private double correlation(float[] first, float[] next, int shift) {
+        double x = 0, y = 0, xx = 0, yy = 0, xy = 0;
+        int count = 0;
+        for (int i = 16; i < first.length - 16; i++) {
+            double a = first[i], b = next[i + shift];
+            x += a; y += b; xx += a * a; yy += b * b; xy += a * b;
+            count++;
+        }
+        return (count * xy - x * y) / Math.sqrt((count * xx - x * x) * (count * yy - y * y));
     }
 }

@@ -24,9 +24,21 @@ public class LineAnimationTest {
         for (int frame = 0; frame < 1000; frame++) {
             float[] animated = LineAnimation.pointsAt(stroke, frame);
             for (int coordinate = 0; coordinate < animated.length; coordinate++) {
-                assertTrue(Math.abs(animated[coordinate] - POINTS[coordinate]) <= 3.2f + .0001f);
+                assertTrue(Math.abs(animated[coordinate] - POINTS[coordinate]) <= 8f + .0001f);
             }
         }
+    }
+
+    @Test public void movementIsMorePronouncedThanThePreviousDisplacementLimit() {
+        Stroke stroke = new Stroke(2, Layer.LINE_ART, 0xff000000, 12, POINTS);
+        float peak = 0;
+        for (int frame = 0; frame < LineAnimation.FRAME_COUNT; frame++) {
+            float[] animated = LineAnimation.pointsAt(stroke, frame);
+            for (int i = 0; i < animated.length; i++) {
+                peak = Math.max(peak, Math.abs(animated[i] - POINTS[i]));
+            }
+        }
+        assertTrue("El movimiento debe superar claramente el límite anterior de 3,2 unidades", peak > 4);
     }
 
     @Test public void strokesHaveDistinctDeterministicMotion() {
