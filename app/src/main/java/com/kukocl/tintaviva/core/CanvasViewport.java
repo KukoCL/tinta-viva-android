@@ -72,4 +72,3 @@ public final class CanvasViewport {
         return Math.max(viewSize - margin - documentSize, Math.min(margin, origin));
     }
 }
-

@@ -90,4 +90,3 @@ final class StudioIcon extends View {
         canvas.restoreToCount(saved);
     }
 }
-

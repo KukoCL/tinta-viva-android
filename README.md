@@ -93,4 +93,3 @@ Tecnología: Java 17, Android SDK 35, Android Gradle Plugin 8.7.3 y Gradle 8.9. 
 ```
 
 Las pruebas verifican opacidad, vista de solo line art, separación de capas, colores, borrado completo, orden de superposición al deshacer, restauración de documentos, puntos aislados, muestreo de entrada y animación determinista sin deriva. También comprueban el foco y los límites del zoom, las coordenadas al dibujar y borrar después de ampliar, la cancelación de trazos al pellizcar y que la goma no borre durante esos gestos. Las pruebas del grosor animado comprueban su variación local y temporal, sus límites y el borrado de zonas finas y gruesas; las pruebas gráficas de Skia verifican los píxeles del contorno, las uniones redondeadas y los giros cerrados. La guía de pruebas manuales cubre los gestos y la apariencia en un dispositivo.
-

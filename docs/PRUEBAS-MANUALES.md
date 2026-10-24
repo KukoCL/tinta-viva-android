@@ -22,4 +22,3 @@ Esta lista describe verificaciones que requieren ejecutar la app en Android. Las
 17. **Nuevo dibujo.** Dibuja en ambas capas, borra un trazo, amplía y desplaza el lienzo. Comprueba que el botón de hoja con + tiene una separación clara respecto de Deshacer. Púlsalo: no se borra nada hasta confirmar. Cancela con Cancelar, Atrás o tocando fuera: se conservan el dibujo, el zoom y el historial. Vuelve a pulsarlo y confirma Nuevo dibujo: se vacían las dos capas y el historial, se seleccionan Sketch y Pincel y se muestra la página completa. El color y el grosor se conservan. Sal y vuelve a abrir la app una vez terminado el guardado: el dibujo anterior no debe reaparecer. Dibuja y deshaz en el nuevo lienzo para comprobar que funciona normalmente.
 
 Dispositivos recomendados: Android 8.0 (API 26), Android 15 (API 35), un teléfono pequeño y una tablet o emulador en ambas orientaciones.
-

@@ -2,6 +2,7 @@ package com.kukocl.tintaviva;
 
 import android.app.AlertDialog;
 import android.graphics.Rect;
+import android.os.Looper;
 import android.view.View;
 
 import com.kukocl.tintaviva.core.Layer;
@@ -20,6 +21,7 @@ import org.robolectric.shadows.ShadowAlertDialog;
 import java.util.Collections;
 
 import static org.junit.Assert.*;
+import static org.robolectric.Shadows.shadowOf;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 28, qualifiers = "w360dp-h640dp-mdpi")
@@ -110,6 +112,7 @@ public class MainActivityTest {
         assertTrue(dialog.isShowing());
         assertEquals(2, session.document.getStrokes().size());
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
+        shadowOf(Looper.getMainLooper()).idle();
         assertFalse(dialog.isShowing());
         assertEquals(2, session.document.getStrokes().size());
         assertTrue(session.document.canUndo());
@@ -123,6 +126,8 @@ public class MainActivityTest {
         activity.findViewById(R.id.action_new_drawing).performClick();
         AlertDialog dialog = ShadowAlertDialog.getLatestAlertDialog();
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertFalse(dialog.isShowing());
         assertTrue(session.document.getStrokes().isEmpty());
         assertFalse(session.document.canUndo());
         assertFalse(session.document.undo());
@@ -181,4 +186,3 @@ public class MainActivityTest {
         return new Rect(location[0], location[1], location[0] + view.getWidth(), location[1] + view.getHeight());
     }
 }
-

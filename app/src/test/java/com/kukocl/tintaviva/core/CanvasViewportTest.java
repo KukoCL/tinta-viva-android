@@ -109,4 +109,3 @@ public class CanvasViewportTest {
         assertEquals(1, view.getZoom(), 0);
     }
 }
-
