@@ -1,9 +1,10 @@
 package com.kukocl.tintaviva.core;
 
-/** Eight repeating drawings at 8 fps: a gentle hand-drawn line boil, without drift. */
+/** Eight repeating drawings at 8 fps, with gentle local movement and width variation. */
 public final class LineAnimation {
     public static final int FRAME_COUNT = 8;
     public static final long FRAME_MS = 125;
+    public static final float MAX_WIDTH_VARIATION = .22f;
 
     private LineAnimation() { }
 
@@ -33,5 +34,23 @@ public final class LineAnimation {
             previousY = y;
         }
         return points;
+    }
+
+    /** Full brush width at each original sample; waves travel along the stroke over time. */
+    public static float[] widthsAt(Stroke stroke, int frame) {
+        float[] points = stroke.copyPoints();
+        float[] widths = new float[points.length / 2];
+        double seed = (stroke.id * 0.569840291) % (Math.PI * 2);
+        double phase = Math.floorMod(frame, FRAME_COUNT) * Math.PI * 2 / FRAME_COUNT;
+        float arcLength = 0;
+        for (int i = 0; i < widths.length; i++) {
+            if (i > 0) arcLength += (float) Math.hypot(points[i * 2] - points[i * 2 - 2],
+                    points[i * 2 + 1] - points[i * 2 - 1]);
+            double variation = stroke.layer == Layer.LINE_ART
+                    ? .17 * Math.sin(arcLength * .023 + seed - phase)
+                    + .05 * Math.sin(arcLength * .051 + seed * 1.9 + phase * 2) : 0;
+            widths[i] = stroke.width * (1 + (float) variation);
+        }
+        return widths;
     }
 }

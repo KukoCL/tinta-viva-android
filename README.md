@@ -6,6 +6,7 @@ Una pequeña app nativa de Android para dibujar con líneas que parecen cobrar v
 
 - **Sketch:** capa inferior, con colores libres.
 - **Line art:** capa superior. Cada trazo comienza a moverse en cuanto levantas el dedo o el lápiz.
+- **Grosor vivo:** distintas zonas del mismo trazo se afinan y ensanchan suavemente mientras se mueve. La variación local alcanza como máximo un 22 % del grosor elegido; no se escala toda la línea a la vez.
 - Al seleccionar **Line art**, el sketch se muestra al **40 % de opacidad**: 0 % sería invisible y 100 % completamente opaco. Al volver a Sketch recupera el 100 %.
 - **Solo line art:** tercer botón que oculta el sketch y permite seguir dibujando en la capa superior. El sketch se conserva y vuelve a mostrarse al seleccionar las otras vistas.
 - Barra compacta con iconos de pincel, goma y color. El icono de paleta abre los colores predefinidos y el selector de cualquier color mediante tono, saturación, luminosidad o código hexadecimal.
@@ -18,6 +19,8 @@ Una pequeña app nativa de Android para dibujar con líneas que parecen cobrar v
 - Distribución adaptada a orientación vertical, horizontal y pantallas grandes.
 
 La versión **1.1.0** amplía el espacio disponible para el lienzo al retirar la línea de ayuda, compactar la cabecera y reunir las herramientas en una sola fila. El zoom y el desplazamiento no modifican el tamaño de los trazos guardados y se conservan durante la rotación de pantalla en la misma sesión.
+
+La versión **1.2.0** añade variación animada de grosor a cada zona del line art, incluidos los trazos ya guardados. El sketch conserva su grosor original. La goma tiene en cuenta el grosor local del fotograma visible.
 
 No requiere cuenta, conexión a Internet ni permisos de almacenamiento. El archivo se guarda en el espacio privado de la app. Esta primera versión trabaja con un solo lienzo; no incluye galería ni exportación de imágenes o vídeos. El historial de deshacer se conserva al girar la pantalla y se reinicia cuando Android termina el proceso.
 
@@ -60,7 +63,9 @@ El workflow **Compilar APK** ejecuta las pruebas, Android Lint y la compilación
 
 ## Cómo se anima
 
-El documento guarda los trazos como puntos vectoriales en un lienzo de 1080 × 1350. La pantalla ajusta su escala sin modificar el dibujo. Al terminar un trazo de line art se muestran ocho variantes que se repiten a ocho fotogramas por segundo. Cada variante deforma suavemente los puntos a lo largo del trazo, con una semilla distinta para cada línea y un desplazamiento máximo de 3,2 unidades por eje. Los originales nunca cambian: la animación no acumula desplazamiento y el sketch permanece inmóvil.
+El documento guarda los trazos como puntos vectoriales en un lienzo de 1080 × 1350. La pantalla ajusta su escala sin modificar el dibujo. Al terminar un trazo de line art se muestran ocho variantes que se repiten a ocho fotogramas por segundo. Cada variante deforma suavemente los puntos a lo largo del trazo, con una semilla distinta para cada línea y un desplazamiento máximo de 3,2 unidades por eje. También calcula un grosor distinto para cada punto a partir de la distancia recorrida por el trazo y del mismo reloj de animación: las zonas finas y gruesas cambian con el tiempo. El grosor local se mantiene entre el 78 % y el 122 % del valor del pincel.
+
+Cada fotograma se dibuja como un contorno relleno con extremos y uniones redondeados. Los originales nunca cambian: la animación no acumula desplazamiento ni cambios de grosor y el sketch permanece inmóvil. La semilla del trazo permite recuperar el mismo efecto al abrir un dibujo guardado.
 
 Las geometrías se reutilizan entre fotogramas. La animación se detiene cuando la actividad pasa a segundo plano. La goma comprueba la geometría del fotograma visible para poder tocar las líneas animadas, también después de ampliar y desplazar el lienzo.
 
@@ -70,6 +75,7 @@ Las geometrías se reutilizan entre fotogramas. La animación se detiene cuando 
 app/src/main/java/com/kukocl/tintaviva/
   core/                 Documento, trazos, animación, goma, historial y zoom
   DrawingView.java      Lienzo, renderizado y entrada táctil/lápiz
+  AnimatedStrokePath.java  Contorno del pincel con grosor variable
   MainActivity.java     Interfaz del estudio
   ColorPickerDialog.java
   DocumentStore.java    Guardado JSON atómico en segundo plano
@@ -84,4 +90,4 @@ Tecnología: Java 17, Android SDK 35, Android Gradle Plugin 8.7.3 y Gradle 8.9. 
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug
 ```
 
-Las pruebas verifican opacidad, vista de solo line art, separación de capas, colores, borrado completo, orden de superposición al deshacer, restauración de documentos, puntos aislados, muestreo de entrada y animación determinista sin deriva. También comprueban el foco y los límites del zoom, las coordenadas al dibujar y borrar después de ampliar, la cancelación de trazos al pellizcar y que la goma no borre durante esos gestos. La guía de pruebas manuales cubre los gestos y la apariencia en un dispositivo.
+Las pruebas verifican opacidad, vista de solo line art, separación de capas, colores, borrado completo, orden de superposición al deshacer, restauración de documentos, puntos aislados, muestreo de entrada y animación determinista sin deriva. También comprueban el foco y los límites del zoom, las coordenadas al dibujar y borrar después de ampliar, la cancelación de trazos al pellizcar y que la goma no borre durante esos gestos. Las pruebas del grosor animado comprueban su variación local y temporal, sus límites y el borrado de zonas finas y gruesas; las pruebas gráficas de Skia verifican los píxeles del contorno, las uniones redondeadas y los giros cerrados. La guía de pruebas manuales cubre los gestos y la apariencia en un dispositivo.

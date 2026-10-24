@@ -150,9 +150,16 @@ public final class DrawingView extends View {
                 pathCache.put(stroke.id, frames);
             }
             int index = layer == Layer.LINE_ART ? displayedFrame : 0;
-            if (frames[index] == null) frames[index] = makePath(LineAnimation.pointsAt(stroke, index));
+            if (frames[index] == null) {
+                float[] points = LineAnimation.pointsAt(stroke, index);
+                frames[index] = layer == Layer.LINE_ART
+                        ? AnimatedStrokePath.create(points, LineAnimation.widthsAt(stroke, index)) : makePath(points);
+            }
             configurePaint(stroke.color, stroke.width, opacity);
-            if (stroke.pointCount() == 1) {
+            if (layer == Layer.LINE_ART) {
+                paint.setStyle(Paint.Style.FILL);
+                canvas.drawPath(frames[index], paint);
+            } else if (stroke.pointCount() == 1) {
                 float[] point = LineAnimation.pointsAt(stroke, index);
                 paint.setStyle(Paint.Style.FILL);
                 canvas.drawCircle(point[0], point[1], stroke.width / 2, paint);
