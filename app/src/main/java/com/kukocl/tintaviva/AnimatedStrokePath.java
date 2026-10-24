@@ -29,19 +29,22 @@ final class AnimatedStrokePath {
             path.addCircle(points[0], points[1], radii[0], Path.Direction.CCW);
             return path;
         }
-        float[] nx = new float[count - 1], ny = new float[count - 1];
+        float[] nx = new float[count - 1], ny = new float[count - 1], lengths = new float[count - 1];
         for (int i = 0; i < count - 1; i++) {
             float dx = points[i * 2 + 2] - points[i * 2];
             float dy = points[i * 2 + 3] - points[i * 2 + 1];
             float length = (float) Math.hypot(dx, dy);
+            lengths[i] = length;
             nx[i] = -dy / length;
             ny[i] = dx / length;
         }
-        // Split hairpin turns into overlapping round-capped contours. This prevents
-        // their two offset edges crossing and leaving a triangular hole near the turn.
+        // Split hairpins and curves tighter than the brush into overlapping round-capped
+        // contours, preventing crossed inner edges and holes inside very small loops.
         int start = 0;
         for (int i = 1; i < count - 1; i++) {
-            if (nx[i - 1] * nx[i] + ny[i - 1] * ny[i] < -.95f) {
+            float dot = Math.max(-1, Math.min(1, nx[i - 1] * nx[i] + ny[i - 1] * ny[i]));
+            float halfTurn = (float) Math.sqrt((1 - dot) / 2);
+            if (dot < -.95f || radii[i] * halfTurn > .4f * Math.min(lengths[i - 1], lengths[i])) {
                 ribbon(path, points, radii, nx, ny, start, i);
                 start = i;
             }

@@ -51,6 +51,20 @@ public class AnimatedStrokePathTest {
         assertEquals(Color.WHITE, image.getPixel(110, 100));
     }
 
+    @Test public void aBrushWiderThanATinyLoopFillsItsCenter() {
+        float[] points = new float[34], widths = new float[17];
+        for (int i = 0; i < 17; i++) {
+            double angle = i * Math.PI * 2 / 16;
+            points[i * 2] = 100 + 8 * (float) Math.cos(angle);
+            points[i * 2 + 1] = 100 + 8 * (float) Math.sin(angle);
+            widths[i] = 24;
+        }
+        Bitmap image = render(points, widths);
+        assertEquals(Color.BLACK, image.getPixel(100, 100));
+        assertEquals(Color.BLACK, image.getPixel(118, 100));
+        assertEquals(Color.WHITE, image.getPixel(124, 100));
+    }
+
     private Bitmap render(float[] points, float[] widths) {
         Bitmap image = Bitmap.createBitmap(400, 250, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(image);
