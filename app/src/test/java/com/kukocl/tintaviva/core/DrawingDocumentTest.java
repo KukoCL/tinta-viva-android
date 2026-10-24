@@ -18,6 +18,39 @@ public class DrawingDocumentTest {
         assertEquals(1f, document.sketchOpacity(), 0);
     }
 
+    @Test public void lineArtOnlyHidesSketchAndKeepsEditingOnTheTopLayer() {
+        Stroke sketch = document.addStroke(0xffff0000, 10, LINE);
+        document.showOnlyLineArt();
+        assertTrue(document.isLineArtOnly());
+        assertEquals(0, document.sketchOpacity(), 0);
+        assertEquals(Layer.LINE_ART, document.getActiveLayer());
+        Stroke ink = document.addStroke(0xff0000ff, 10, LINE);
+        assertEquals(Layer.LINE_ART, ink.layer);
+        assertTrue(document.undo());
+        assertEquals(Arrays.asList(sketch), document.getStrokes());
+        assertTrue(document.isLineArtOnly());
+    }
+
+    @Test public void returningFromLineArtOnlyRestoresTheCorrectSketchOpacity() {
+        document.showOnlyLineArt();
+        document.setActiveLayer(Layer.LINE_ART);
+        assertFalse(document.isLineArtOnly());
+        assertEquals(.4f, document.sketchOpacity(), 0);
+        document.showOnlyLineArt();
+        document.setActiveLayer(Layer.SKETCH);
+        assertFalse(document.isLineArtOnly());
+        assertEquals(1, document.sketchOpacity(), 0);
+    }
+
+    @Test public void changingTheViewNeverCreatesAnUndoStep() {
+        Stroke stroke = document.addStroke(0xff000000, 10, LINE);
+        document.showOnlyLineArt();
+        document.setActiveLayer(Layer.LINE_ART);
+        assertTrue(document.undo());
+        assertFalse(document.getStrokes().contains(stroke));
+        assertFalse(document.canUndo());
+    }
+
     @Test public void colorsAndLayersAreRetainedIndependentlyForEveryStroke() {
         Stroke sketch = document.addStroke(0xffed6767, 10, LINE);
         document.setActiveLayer(Layer.LINE_ART);

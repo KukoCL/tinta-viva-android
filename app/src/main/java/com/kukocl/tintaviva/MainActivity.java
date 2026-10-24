@@ -11,7 +11,6 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowInsets;
-import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
@@ -21,7 +20,6 @@ import android.widget.Toast;
 import com.kukocl.tintaviva.core.DrawingDocument;
 import com.kukocl.tintaviva.core.Layer;
 
-import java.util.ArrayList;
 import java.util.Locale;
 
 public final class MainActivity extends Activity {
@@ -29,17 +27,14 @@ public final class MainActivity extends Activity {
     private static final int MUTED = 0xff667366;
     private static final int BACKGROUND = 0xfff5f3ed;
     private static final int ACTIVE = 0xffdcebcf;
-    private static final int[] COLORS = {
-            0xff29302b, 0xff8c69c6, 0xff4b84cd, 0xff37a58a,
-            0xffe7b83f, 0xffe88c46, 0xffdc6270, 0xffd489b1
-    };
-    private final ArrayList<ColorSwatch> swatches = new ArrayList<>();
+    private static final int DEFAULT_COLOR = 0xff29302b;
     private TintaVivaApp session;
     private DrawingDocument document;
     private DrawingView drawingView;
     private SharedPreferences preferences;
-    private LinearLayout sketchCard, lineCard, brushButton, eraserButton, undoButton;
-    private TextView hint, colorValue, sizeValue;
+    private LinearLayout sketchCard, lineCard, onlyCard, brushButton, eraserButton, colorButton, undoButton;
+    private TextView sizeValue;
+    private StudioIcon colorIcon;
     private int selectedColor;
     private int brushWidth;
     private boolean erasing;
@@ -54,13 +49,14 @@ public final class MainActivity extends Activity {
         session = (TintaVivaApp) getApplication();
         document = session.document;
         preferences = getSharedPreferences("studio", MODE_PRIVATE);
-        selectedColor = preferences.getInt("color", COLORS[0]);
+        selectedColor = preferences.getInt("color", DEFAULT_COLOR);
         brushWidth = Math.max(2, Math.min(32, preferences.getInt("width", 12)));
         erasing = preferences.getBoolean("eraser", false);
         document.setActiveLayer(preferences.getBoolean("lineArt", false) ? Layer.LINE_ART : Layer.SKETCH);
+        if (preferences.getBoolean("lineArtOnly", false)) document.showOnlyLineArt();
         LinearLayout root = vertical();
         root.setBackgroundColor(BACKGROUND);
-        root.setPadding(dp(16), 0, dp(16), 0);
+        root.setPadding(dp(8), 0, dp(8), 0);
         root.setOnApplyWindowInsetsListener((view, insets) -> {
             int left, top, right, bottom;
             if (Build.VERSION.SDK_INT >= 30) {
@@ -71,11 +67,12 @@ public final class MainActivity extends Activity {
                 left = insets.getSystemWindowInsetLeft(); top = insets.getSystemWindowInsetTop();
                 right = insets.getSystemWindowInsetRight(); bottom = insets.getSystemWindowInsetBottom();
             }
-            view.setPadding(dp(16) + left, top, dp(16) + right, bottom);
+            view.setPadding(dp(8) + left, top, dp(8) + right, bottom);
             return insets;
         });
-        root.addView(makeHeader(), params(-1, 68));
-        drawingView = new DrawingView(this, document);
+        root.addView(makeHeader(), params(-1, 50));
+        drawingView = new DrawingView(this, document, session.viewport);
+        drawingView.setId(R.id.drawing_canvas);
         drawingView.setBrushColor(selectedColor);
         drawingView.setBrushWidth(brushWidth);
         drawingView.setErasing(erasing);
@@ -89,13 +86,13 @@ public final class MainActivity extends Activity {
             LinearLayout body = horizontal();
             body.addView(drawingView, new LinearLayout.LayoutParams(0, -1, 1));
             LinearLayout panel = vertical();
-            panel.setPadding(dp(12), dp(8), 0, dp(12));
+            panel.setPadding(dp(8), dp(4), 0, dp(8));
             addLayers(panel);
             addTools(panel);
             ScrollView scroll = new ScrollView(this);
             scroll.setFillViewport(true);
             scroll.addView(panel);
-            body.addView(scroll, params(290, -1));
+            body.addView(scroll, params(270, -1));
             root.addView(body, new LinearLayout.LayoutParams(-1, 0, 1));
         } else {
             addLayers(root);
@@ -116,17 +113,14 @@ public final class MainActivity extends Activity {
         LinearLayout header = horizontal();
         header.setGravity(Gravity.CENTER_VERTICAL);
         StudioIcon logo = new StudioIcon(this, "logo", INK);
-        header.addView(logo, params(34, 34));
+        header.addView(logo, params(28, 28));
         LinearLayout title = vertical();
         title.setPadding(dp(10), 0, 0, 0);
-        TextView name = text("Tinta Viva", 24, INK, true);
+        TextView name = text("Tinta Viva", 22, INK, true);
         name.setTypeface(Typeface.create("sans-serif-rounded", Typeface.BOLD));
         title.addView(name);
-        TextView sub = text("PEQUEÑAS LÍNEAS, MUCHA VIDA", 9, MUTED, true);
-        sub.setLetterSpacing(.08f);
-        title.addView(sub);
         header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-        undoButton = toolButton("undo", "Deshacer");
+        undoButton = iconButton("undo", "Deshacer");
         undoButton.setOnClickListener(view -> {
             drawingView.cancelPending();
             if (document.undo()) {
@@ -136,80 +130,68 @@ public final class MainActivity extends Activity {
             }
         });
         undoButton.setContentDescription("Deshacer la última acción, también si fue borrar un trazo");
-        header.addView(undoButton, params(108, 48));
+        header.addView(undoButton, params(48, 48));
         return header;
     }
 
     private void addLayers(LinearLayout parent) {
         LinearLayout row = horizontal();
-        sketchCard = layerCard("Sketch", "01 · TU BASE");
-        lineCard = layerCard("Line art", "02 · COBRA VIDA");
-        LinearLayout.LayoutParams first = new LinearLayout.LayoutParams(0, dp(58), 1);
-        first.rightMargin = dp(8);
-        row.addView(sketchCard, first);
-        row.addView(lineCard, new LinearLayout.LayoutParams(0, dp(58), 1));
-        parent.addView(row, params(-1, 58));
+        sketchCard = layerCard("Sketch");
+        sketchCard.setId(R.id.layer_sketch);
+        lineCard = layerCard("Line art");
+        lineCard.setId(R.id.layer_line_art);
+        onlyCard = layerCard("Solo line art");
+        onlyCard.setId(R.id.layer_line_art_only);
+        for (LinearLayout card : new LinearLayout[]{sketchCard, lineCard, onlyCard}) {
+            LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(0, dp(48), 1);
+            if (card != onlyCard) cardParams.rightMargin = dp(4);
+            row.addView(card, cardParams);
+        }
+        LinearLayout.LayoutParams layerParams = params(-1, 48);
+        layerParams.bottomMargin = dp(4);
+        parent.addView(row, layerParams);
         sketchCard.setOnClickListener(view -> selectLayer(Layer.SKETCH));
         lineCard.setOnClickListener(view -> selectLayer(Layer.LINE_ART));
-        hint = text("", 11, MUTED, false);
-        hint.setGravity(Gravity.CENTER_VERTICAL);
-        hint.setMaxLines(2);
-        parent.addView(hint, params(-1, 34));
+        onlyCard.setOnClickListener(view -> {
+            document.showOnlyLineArt();
+            drawingView.layerChanged();
+            preferences.edit().putBoolean("lineArt", true).putBoolean("lineArtOnly", true).apply();
+            updateControls();
+        });
     }
 
-    private LinearLayout layerCard(String name, String description) {
+    private LinearLayout layerCard(String name) {
         LinearLayout card = vertical();
-        card.setPadding(dp(14), dp(6), dp(10), dp(6));
-        card.setGravity(Gravity.CENTER_VERTICAL);
-        card.addView(text(name, 16, INK, true));
-        TextView subtitle = text(description, 9, MUTED, true);
-        subtitle.setLetterSpacing(.07f);
-        card.addView(subtitle);
+        card.setPadding(dp(4), 0, dp(4), 0);
+        card.setGravity(Gravity.CENTER);
+        TextView title = text(name, 12, INK, true);
+        title.setGravity(Gravity.CENTER);
+        title.setMaxLines(2);
+        card.addView(title);
         card.setFocusable(true);
         card.setClickable(true);
         return card;
     }
 
     private void addTools(LinearLayout parent) {
-        LinearLayout tools = vertical();
-        tools.setPadding(0, dp(4), 0, dp(10));
-        LinearLayout buttons = horizontal();
-        brushButton = toolButton("brush", "Pincel");
-        eraserButton = toolButton("eraser", "Goma de trazos");
+        LinearLayout tools = horizontal();
+        tools.setGravity(Gravity.CENTER_VERTICAL);
+        tools.setPadding(0, dp(4), 0, dp(4));
+        brushButton = iconButton("brush", "Pincel");
+        brushButton.setId(R.id.tool_brush);
+        eraserButton = iconButton("eraser", "Goma de trazos");
+        eraserButton.setId(R.id.tool_eraser);
+        colorButton = iconButton("palette", "Elegir color");
+        colorButton.setId(R.id.tool_color);
+        colorIcon = (StudioIcon) colorButton.getChildAt(0);
         brushButton.setOnClickListener(view -> selectTool(false));
         eraserButton.setOnClickListener(view -> selectTool(true));
-        LinearLayout.LayoutParams brushParams = new LinearLayout.LayoutParams(0, dp(48), 1);
-        brushParams.rightMargin = dp(8);
-        buttons.addView(brushButton, brushParams);
-        buttons.addView(eraserButton, new LinearLayout.LayoutParams(0, dp(48), 1));
-        tools.addView(buttons);
-        LinearLayout colorHeading = horizontal();
-        colorHeading.setGravity(Gravity.CENTER_VERTICAL);
-        TextView label = text("COLOR", 10, MUTED, true);
-        label.setLetterSpacing(.1f);
-        colorHeading.addView(label, new LinearLayout.LayoutParams(0, -2, 1));
-        colorValue = text("", 11, MUTED, false);
-        colorHeading.addView(colorValue);
-        tools.addView(colorHeading, params(-1, 26));
-        HorizontalScrollView paletteScroll = new HorizontalScrollView(this);
-        paletteScroll.setHorizontalScrollBarEnabled(false);
-        LinearLayout palette = horizontal();
-        for (int color : COLORS) {
-            ColorSwatch swatch = new ColorSwatch(this, color, false);
-            swatch.setContentDescription("Color " + hex(color));
-            swatch.setOnClickListener(view -> selectColor(color));
-            swatches.add(swatch);
-            palette.addView(swatch, params(42, 48));
+        colorButton.setOnClickListener(view -> ColorPickerDialog.show(this, selectedColor, this::selectColor));
+        for (LinearLayout button : new LinearLayout[]{brushButton, eraserButton, colorButton}) {
+            LinearLayout.LayoutParams buttonParams = params(48, 48);
+            buttonParams.rightMargin = dp(4);
+            tools.addView(button, buttonParams);
         }
-        ColorSwatch custom = new ColorSwatch(this, Color.WHITE, true);
-        custom.setContentDescription("Elegir cualquier color");
-        custom.setOnClickListener(view -> ColorPickerDialog.show(this, selectedColor, this::selectColor));
-        palette.addView(custom, params(48, 48));
-        paletteScroll.addView(palette);
-        tools.addView(paletteScroll, params(-1, 48));
-        LinearLayout widthRow = horizontal();
-        widthRow.setGravity(Gravity.CENTER_VERTICAL);
-        widthRow.addView(text("Grosor", 12, MUTED, false), params(48, -2));
         SeekBar size = new SeekBar(this);
         size.setMax(30);
         size.setProgress(brushWidth - 2);
@@ -225,25 +207,21 @@ public final class MainActivity extends Activity {
             @Override public void onStartTrackingTouch(SeekBar bar) { }
             @Override public void onStopTrackingTouch(SeekBar bar) { }
         });
-        widthRow.addView(size, new LinearLayout.LayoutParams(0, dp(48), 1));
+        tools.addView(size, new LinearLayout.LayoutParams(0, dp(48), 1));
         sizeValue = text(String.valueOf(brushWidth), 12, INK, true);
         sizeValue.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        widthRow.addView(sizeValue, params(28, 48));
-        tools.addView(widthRow, params(-1, 48));
+        tools.addView(sizeValue, params(24, 48));
         parent.addView(tools, params(-1, -2));
     }
 
-    private LinearLayout toolButton(String icon, String label) {
+    private LinearLayout iconButton(String icon, String label) {
         LinearLayout button = horizontal();
         button.setGravity(Gravity.CENTER);
-        button.setPadding(dp(8), 0, dp(8), 0);
-        button.addView(new StudioIcon(this, icon, INK), params(20, 20));
-        TextView title = text(label, 12, INK, true);
-        title.setPadding(dp(7), 0, 0, 0);
-        button.addView(title);
+        button.addView(new StudioIcon(this, icon, INK), params(25, 25));
         button.setFocusable(true);
         button.setClickable(true);
         button.setContentDescription(label);
+        button.setTooltipText(label);
         button.setBackground(background(Color.WHITE, 0xffe1e3d9));
         return button;
     }
@@ -251,7 +229,7 @@ public final class MainActivity extends Activity {
     private void selectLayer(Layer layer) {
         document.setActiveLayer(layer);
         drawingView.layerChanged();
-        preferences.edit().putBoolean("lineArt", layer == Layer.LINE_ART).apply();
+        preferences.edit().putBoolean("lineArt", layer == Layer.LINE_ART).putBoolean("lineArtOnly", false).apply();
         updateControls();
     }
 
@@ -272,16 +250,15 @@ public final class MainActivity extends Activity {
     private void updateControls() {
         boolean lineArt = document.getActiveLayer() == Layer.LINE_ART;
         styleSelection(sketchCard, !lineArt);
-        styleSelection(lineCard, lineArt);
+        styleSelection(lineCard, lineArt && !document.isLineArtOnly());
+        styleSelection(onlyCard, document.isLineArtOnly());
         styleSelection(brushButton, !erasing);
         styleSelection(eraserButton, erasing);
-        sketchCard.setContentDescription("Capa sketch, " + (lineArt ? "opacidad 40 por ciento" : "seleccionada, opacidad 100 por ciento"));
-        lineCard.setContentDescription("Capa line art, encima del sketch, líneas animadas" + (lineArt ? ", seleccionada" : ""));
-        hint.setText(erasing ? "Goma · toca un trazo de esta capa para borrarlo entero"
-                : lineArt ? "Sketch al 40 % · tus líneas cobran vida al soltar"
-                : "Sketch al 100 % · dibuja la base de tu idea");
-        colorValue.setText(hex(selectedColor));
-        for (ColorSwatch swatch : swatches) swatch.setSelected(swatch.color == selectedColor);
+        sketchCard.setContentDescription("Capa sketch" + (!lineArt ? ", seleccionada" : ""));
+        lineCard.setContentDescription("Capa line art, sketch al 40 por ciento" + (lineCard.isSelected() ? ", seleccionada" : ""));
+        onlyCard.setContentDescription("Solo line art, sketch oculto" + (document.isLineArtOnly() ? ", seleccionado" : ""));
+        colorIcon.setAccentColor(selectedColor);
+        colorButton.setContentDescription("Elegir color. Color actual " + hex(selectedColor));
         undoButton.setEnabled(document.canUndo());
         undoButton.setAlpha(document.canUndo() ? 1 : .35f);
     }

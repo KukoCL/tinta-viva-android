@@ -7,12 +7,17 @@ Una pequeña app nativa de Android para dibujar con líneas que parecen cobrar v
 - **Sketch:** capa inferior, con colores libres.
 - **Line art:** capa superior. Cada trazo comienza a moverse en cuanto levantas el dedo o el lápiz.
 - Al seleccionar **Line art**, el sketch se muestra al **40 % de opacidad**: 0 % sería invisible y 100 % completamente opaco. Al volver a Sketch recupera el 100 %.
-- Paleta de colores y selector de cualquier color mediante tono, saturación, luminosidad o código hexadecimal.
+- **Solo line art:** tercer botón que oculta el sketch y permite seguir dibujando en la capa superior. El sketch se conserva y vuelve a mostrarse al seleccionar las otras vistas.
+- Barra compacta con iconos de pincel, goma y color. El icono de paleta abre los colores predefinidos y el selector de cualquier color mediante tono, saturación, luminosidad o código hexadecimal.
 - Un solo tipo de pincel, con grosor ajustable.
-- **Goma de trazos:** toca un trazo y desaparece entero. Solo afecta a la capa seleccionada y, si varios trazos se cruzan, borra el último dibujado en esa capa.
+- **Goma de trazos:** toca y suelta un trazo para borrarlo entero. Solo afecta a la capa seleccionada y, si varios trazos se cruzan, borra el último dibujado en esa capa.
+- **Zoom de 1× a 8×:** pellizca con dos dedos para ampliar o reducir. Mueve ambos dedos juntos para desplazar el lienzo ampliado. Pellizca hacia dentro hasta 1× para volver a ver la página completa.
+- Los gestos de dos dedos no dibujan ni borran. Si colocas el segundo dedo mientras un trazo está en curso, ese borrador de trazo se descarta y empieza la navegación. Al levantar los dedos, puedes iniciar un trazo nuevo normalmente.
 - **Deshacer:** revierte tanto trazos nuevos como borrados, incluso después de cambiar de capa. Conserva hasta 128 acciones durante la sesión.
 - Guardado automático de un dibujo en el dispositivo. Conserva las dos capas, los colores y la animación al volver a abrir la app.
 - Distribución adaptada a orientación vertical, horizontal y pantallas grandes.
+
+La versión **1.1.0** amplía el espacio disponible para el lienzo al retirar la línea de ayuda, compactar la cabecera y reunir las herramientas en una sola fila. El zoom y el desplazamiento no modifican el tamaño de los trazos guardados y se conservan durante la rotación de pantalla en la misma sesión.
 
 No requiere cuenta, conexión a Internet ni permisos de almacenamiento. El archivo se guarda en el espacio privado de la app. Esta primera versión trabaja con un solo lienzo; no incluye galería ni exportación de imágenes o vídeos. El historial de deshacer se conserva al girar la pantalla y se reinicia cuando Android termina el proceso.
 
@@ -57,26 +62,26 @@ El workflow **Compilar APK** ejecuta las pruebas, Android Lint y la compilación
 
 El documento guarda los trazos como puntos vectoriales en un lienzo de 1080 × 1350. La pantalla ajusta su escala sin modificar el dibujo. Al terminar un trazo de line art se muestran ocho variantes que se repiten a ocho fotogramas por segundo. Cada variante deforma suavemente los puntos a lo largo del trazo, con una semilla distinta para cada línea y un desplazamiento máximo de 3,2 unidades por eje. Los originales nunca cambian: la animación no acumula desplazamiento y el sketch permanece inmóvil.
 
-Las geometrías se reutilizan entre fotogramas. La animación se detiene cuando la actividad pasa a segundo plano. La goma comprueba la geometría del fotograma visible para poder tocar las líneas animadas.
+Las geometrías se reutilizan entre fotogramas. La animación se detiene cuando la actividad pasa a segundo plano. La goma comprueba la geometría del fotograma visible para poder tocar las líneas animadas, también después de ampliar y desplazar el lienzo.
 
 ## Estructura y comprobaciones
 
 ```text
 app/src/main/java/com/kukocl/tintaviva/
-  core/                 Documento, trazos, animación, goma e historial
+  core/                 Documento, trazos, animación, goma, historial y zoom
   DrawingView.java      Lienzo, renderizado y entrada táctil/lápiz
   MainActivity.java     Interfaz del estudio
   ColorPickerDialog.java
   DocumentStore.java    Guardado JSON atómico en segundo plano
-app/src/test/           Pruebas del motor sin dependencias de la interfaz
+app/src/test/           Pruebas del motor y gestos/interfaz con Robolectric
 docs/PRUEBAS-MANUALES.md
 .github/workflows/android.yml
 ```
 
-Tecnología: Java 17, Android SDK 35, Android Gradle Plugin 8.7.3 y Gradle 8.9. La app no depende de librerías externas en tiempo de ejecución. JUnit se utiliza únicamente para las pruebas.
+Tecnología: Java 17, Android SDK 35, Android Gradle Plugin 8.7.3 y Gradle 8.9. La app no depende de librerías externas en tiempo de ejecución. JUnit y Robolectric se utilizan únicamente para las pruebas y no se incluyen en el APK.
 
 ```powershell
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug
 ```
 
-Las pruebas verifican opacidad, separación de capas, colores, borrado completo, orden de superposición al deshacer, restauración de documentos, puntos aislados, muestreo de entrada y animación determinista sin deriva. La guía de pruebas manuales cubre los gestos y la apariencia en un dispositivo.
+Las pruebas verifican opacidad, vista de solo line art, separación de capas, colores, borrado completo, orden de superposición al deshacer, restauración de documentos, puntos aislados, muestreo de entrada y animación determinista sin deriva. También comprueban el foco y los límites del zoom, las coordenadas al dibujar y borrar después de ampliar, la cancelación de trazos al pellizcar y que la goma no borre durante esos gestos. La guía de pruebas manuales cubre los gestos y la apariencia en un dispositivo.

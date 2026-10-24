@@ -13,7 +13,9 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
@@ -66,6 +68,23 @@ final class ColorPickerDialog {
             @Override public void onStartTrackingTouch(SeekBar bar) { }
             @Override public void onStopTrackingTouch(SeekBar bar) { }
         });
+        HorizontalScrollView paletteScroll = new HorizontalScrollView(context);
+        paletteScroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout palette = new LinearLayout(context);
+        for (int color : new int[]{0xff29302b, 0xff8c69c6, 0xff4b84cd, 0xff37a58a,
+                0xffe7b83f, 0xffe88c46, 0xffdc6270, 0xffd489b1}) {
+            ColorSwatch swatch = new ColorSwatch(context, color, false);
+            swatch.setContentDescription(String.format(Locale.ROOT, "Color #%06X", color & 0xffffff));
+            swatch.setOnClickListener(view -> {
+                Color.colorToHSV(color, hsv);
+                hue.setProgress(Math.round(hsv[0]));
+                spectrum.invalidate();
+                update.run();
+            });
+            palette.addView(swatch, new LinearLayout.LayoutParams(dp(context, 42), dp(context, 48)));
+        }
+        paletteScroll.addView(palette);
+        layout.addView(paletteScroll, new LinearLayout.LayoutParams(-1, dp(context, 48)));
         TextView hueLabel = new TextView(context);
         hueLabel.setText("Tono");
         hueLabel.setLabelFor(hue.getId());
@@ -74,9 +93,11 @@ final class ColorPickerDialog {
         layout.addView(hex, new LinearLayout.LayoutParams(-1, dp(context, 52)));
         layout.addView(preview, new LinearLayout.LayoutParams(-1, dp(context, 44)));
         update.run();
+        ScrollView scroll = new ScrollView(context);
+        scroll.addView(layout);
         AlertDialog dialog = new AlertDialog.Builder(context)
                 .setTitle("Tu color")
-                .setView(layout)
+                .setView(scroll)
                 .setNegativeButton("Cancelar", null)
                 .setPositiveButton("Usar color", null).create();
         dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)

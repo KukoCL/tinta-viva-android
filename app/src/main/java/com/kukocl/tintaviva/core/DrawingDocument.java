@@ -16,13 +16,17 @@ public final class DrawingDocument {
     private final ArrayDeque<Edit> history = new ArrayDeque<>();
     private long nextId = 1;
     private Layer activeLayer = Layer.SKETCH;
+    private boolean lineArtOnly;
 
     public Layer getActiveLayer() { return activeLayer; }
     public void setActiveLayer(Layer layer) {
         if (layer == null) throw new IllegalArgumentException("Missing layer");
         activeLayer = layer;
+        lineArtOnly = false;
     }
-    public float sketchOpacity() { return activeLayer == Layer.LINE_ART ? .4f : 1f; }
+    public void showOnlyLineArt() { activeLayer = Layer.LINE_ART; lineArtOnly = true; }
+    public boolean isLineArtOnly() { return lineArtOnly; }
+    public float sketchOpacity() { return lineArtOnly ? 0 : activeLayer == Layer.LINE_ART ? .4f : 1f; }
     public List<Stroke> getStrokes() { return Collections.unmodifiableList(strokes); }
     public List<Stroke> snapshot() { return new ArrayList<>(strokes); }
     public boolean canUndo() { return !history.isEmpty(); }

@@ -1,0 +1,9 @@
+<resources>
+    <item name="drawing_canvas" type="id" />
+    <item name="layer_sketch" type="id" />
+    <item name="layer_line_art" type="id" />
+    <item name="layer_line_art_only" type="id" />
+    <item name="tool_brush" type="id" />
+    <item name="tool_eraser" type="id" />
+    <item name="tool_color" type="id" />
+</resources>

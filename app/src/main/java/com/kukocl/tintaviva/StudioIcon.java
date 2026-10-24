@@ -11,6 +11,7 @@ final class StudioIcon extends View {
     private final String kind;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private int color;
+    private int accentColor = 0xff37a58a;
 
     StudioIcon(Context context, String kind, int color) {
         super(context);
@@ -20,6 +21,7 @@ final class StudioIcon extends View {
     }
 
     void setColor(int color) { this.color = color; invalidate(); }
+    void setAccentColor(int color) { accentColor = color; invalidate(); }
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -52,6 +54,13 @@ final class StudioIcon extends View {
                 path.moveTo(9, 16); path.cubicTo(3, 14, 8, 23, 2, 21);
                 path.cubicTo(8, 24, 13, 21, 11, 18);
                 break;
+            case "palette":
+                path.moveTo(12, 3);
+                path.cubicTo(1, 3, 0, 19, 10, 21);
+                path.cubicTo(16, 23, 12, 17, 16, 16);
+                path.cubicTo(24, 16, 24, 3, 12, 3);
+                path.close();
+                break;
             default:
                 path.moveTo(4, 9); path.cubicTo(8, 1, 22, 4, 21, 13);
                 path.cubicTo(20, 24, 4, 24, 5, 15);
@@ -59,6 +68,18 @@ final class StudioIcon extends View {
                 paint.setStrokeWidth(2.4f);
         }
         canvas.drawPath(path, paint);
+        if (kind.equals("palette")) {
+            paint.setStyle(Paint.Style.FILL);
+            for (float[] dot : new float[][]{{8, 8}, {14, 7}, {18, 11}}) {
+                canvas.drawCircle(dot[0], dot[1], 1.2f, paint);
+            }
+            paint.setColor(accentColor);
+            canvas.drawCircle(8, 15, 3, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setColor(color);
+            paint.setStrokeWidth(.8f);
+            canvas.drawCircle(8, 15, 3, paint);
+        }
         canvas.restoreToCount(saved);
     }
 }

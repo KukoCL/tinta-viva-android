@@ -8,10 +8,12 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.os.SystemClock;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.accessibility.AccessibilityNodeInfo;
 
 import com.kukocl.tintaviva.core.DrawingDocument;
+import com.kukocl.tintaviva.core.CanvasViewport;
 import com.kukocl.tintaviva.core.Layer;
 import com.kukocl.tintaviva.core.LineAnimation;
 import com.kukocl.tintaviva.core.Stroke;
@@ -25,6 +27,8 @@ import java.util.Set;
 public final class DrawingView extends View {
     public interface Listener { void onDrawingChanged(); }
     private final DrawingDocument document;
+    private final CanvasViewport viewport;
+    private final ScaleGestureDetector scaleDetector;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF paper = new RectF();
@@ -37,17 +41,33 @@ public final class DrawingView extends View {
     private boolean animationAllowed;
     private int brushColor = Color.rgb(41, 48, 43);
     private float brushWidth = 12;
-    private float scale = 1;
     private int displayedFrame;
     private int pendingColor;
     private float pendingWidth;
+    private boolean gestureActive, navigating, gestureErasing, startedOnPaper, stylusGesture;
+    private float previousFocusX, previousFocusY, gestureScaleFactor = 1;
 
     public DrawingView(Context context, DrawingDocument document) {
+        this(context, document, new CanvasViewport());
+    }
+
+    public DrawingView(Context context, DrawingDocument document, CanvasViewport viewport) {
         super(context);
         this.document = document;
+        this.viewport = viewport;
+        scaleDetector = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            @Override public boolean onScaleBegin(ScaleGestureDetector detector) { return true; }
+            @Override public boolean onScale(ScaleGestureDetector detector) {
+                gestureScaleFactor = detector.getScaleFactor();
+                return true;
+            }
+        });
+        scaleDetector.setQuickScaleEnabled(false);
+        scaleDetector.setStylusScaleEnabled(false);
         setFocusable(true);
         setContentDescription("Lienzo de dibujo. Dibuja con el dedo o con un lápiz. "
-                + "En modo goma, toca un trazo para borrarlo entero de la capa seleccionada.");
+                + "Pellizca con dos dedos para ampliar y desplázalos para mover el lienzo. "
+                + "En modo goma, toca y suelta un trazo para borrarlo entero de la capa seleccionada.");
         paint.setStrokeCap(Paint.Cap.ROUND);
         paint.setStrokeJoin(Paint.Join.ROUND);
         setLayerType(View.LAYER_TYPE_HARDWARE, null);
@@ -74,16 +94,12 @@ public final class DrawingView extends View {
 
     @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        float margin = dp(10);
-        scale = Math.max(.001f, Math.min((w - margin * 2) / DrawingDocument.WIDTH,
-                (h - margin * 2) / DrawingDocument.HEIGHT));
-        float width = DrawingDocument.WIDTH * scale;
-        float height = DrawingDocument.HEIGHT * scale;
-        paper.set((w - width) / 2, (h - height) / 2, (w + width) / 2, (h + height) / 2);
+        viewport.resize(w, h, dp(2));
     }
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        paper.set(viewport.getLeft(), viewport.getTop(), viewport.getRight(), viewport.getBottom());
         displayedFrame = LineAnimation.frameAt(SystemClock.uptimeMillis());
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(Color.WHITE);
@@ -92,14 +108,14 @@ public final class DrawingView extends View {
         int saved = canvas.save();
         canvas.clipRect(paper);
         canvas.translate(paper.left, paper.top);
-        canvas.scale(scale, scale);
-        if (document.sketchOpacity() < 1) {
+        canvas.scale(viewport.getScale(), viewport.getScale());
+        if (document.sketchOpacity() > 0 && document.sketchOpacity() < 1) {
             // Apply opacity to the composite layer, so overlapping sketch strokes stay at 40%.
             int sketchSave = canvas.saveLayerAlpha(0, 0, DrawingDocument.WIDTH,
                     DrawingDocument.HEIGHT, Math.round(document.sketchOpacity() * 255));
             drawLayer(canvas, Layer.SKETCH, 1);
             canvas.restoreToCount(sketchSave);
-        } else drawLayer(canvas, Layer.SKETCH, 1);
+        } else if (document.sketchOpacity() == 1) drawLayer(canvas, Layer.SKETCH, 1);
         drawLayer(canvas, Layer.LINE_ART, 1);
         if (document.getStrokes().isEmpty() && pending == null) {
             textPaint.setTextAlign(Paint.Align.CENTER);
@@ -171,29 +187,55 @@ public final class DrawingView extends View {
     @Override public boolean onTouchEvent(MotionEvent event) {
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
-            if (!paper.contains(event.getX(), event.getY())) return false;
-            getParent().requestDisallowInterceptTouchEvent(true);
+            cancelPending();
+            gestureActive = true;
+            disallowParentInterception(true);
             activePointer = event.getPointerId(0);
+            startedOnPaper = viewport.contains(event.getX(), event.getY());
             boolean physicalEraser = event.getToolType(0) == MotionEvent.TOOL_TYPE_ERASER;
-            if (erasing || physicalEraser) {
-                if (document.eraseAt(toX(event.getX()), toY(event.getY()), dp(9) / scale, displayedFrame)) {
-                    changed();
-                }
-            } else {
+            stylusGesture = physicalEraser || event.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS;
+            gestureErasing = erasing || physicalEraser;
+            if (startedOnPaper && !gestureErasing) {
                 pending = new StrokeBuilder();
                 pendingColor = brushColor;
                 pendingWidth = brushWidth;
                 pending.add(toX(event.getX()), toY(event.getY()));
             }
+            if (!stylusGesture) scaleDetector.onTouchEvent(event);
             invalidate();
             return true;
         }
-        if (activePointer < 0) return false;
+        if (!gestureActive) return false;
+        gestureScaleFactor = 1;
+        if (action == MotionEvent.ACTION_POINTER_DOWN && !stylusGesture) {
+            // A pinch cancels the unfinished draft and suppresses editing until every finger is up.
+            pending = null;
+            navigating = true;
+            previousFocusX = focus(event, true, -1);
+            previousFocusY = focus(event, false, -1);
+            invalidate();
+        }
+        if (!stylusGesture) scaleDetector.onTouchEvent(event);
+        if (navigating) {
+            if (action == MotionEvent.ACTION_MOVE && event.getPointerCount() >= 2) {
+                float focusX = focus(event, true, -1), focusY = focus(event, false, -1);
+                viewport.transform(gestureScaleFactor, previousFocusX, previousFocusY, focusX, focusY);
+                previousFocusX = focusX;
+                previousFocusY = focusY;
+                invalidate();
+            } else if (action == MotionEvent.ACTION_POINTER_UP) {
+                // Rebase the focus when a third finger joins or leaves; never jump to its position.
+                previousFocusX = focus(event, true, event.getActionIndex());
+                previousFocusY = focus(event, false, event.getActionIndex());
+            }
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) cancelPending();
+            return true;
+        }
         if (action == MotionEvent.ACTION_CANCEL) {
             cancelPending();
             return true;
         }
-        // A resting palm or second finger must never join two separate strokes.
+        // Additional fingers are ignored while an actual pen is drawing (palm rejection).
         if (action == MotionEvent.ACTION_POINTER_DOWN) return true;
         int index = event.findPointerIndex(activePointer);
         if (index < 0) { cancelPending(); return true; }
@@ -211,9 +253,12 @@ public final class DrawingView extends View {
                 document.addStroke(pendingColor, pendingWidth, pending.finish());
                 pending = null;
                 changed();
+            } else if (gestureErasing && startedOnPaper && viewport.contains(event.getX(index), event.getY(index))) {
+                // Wait for release: placing a second finger to zoom must never erase a stroke.
+                if (document.eraseAt(toX(event.getX(index)), toY(event.getY(index)),
+                        dp(9) / viewport.getScale(), displayedFrame)) changed();
             }
-            activePointer = -1;
-            getParent().requestDisallowInterceptTouchEvent(false);
+            cancelPending();
             performClick();
         }
         return true;
@@ -225,16 +270,34 @@ public final class DrawingView extends View {
                 Math.max(0, Math.min(DrawingDocument.HEIGHT, toY(y))));
     }
 
-    private float toX(float x) { return (x - paper.left) / scale; }
-    private float toY(float y) { return (y - paper.top) / scale; }
+    private static float focus(MotionEvent event, boolean horizontal, int excludedIndex) {
+        float sum = 0;
+        int count = 0;
+        for (int i = 0; i < event.getPointerCount(); i++) {
+            if (i == excludedIndex) continue;
+            sum += horizontal ? event.getX(i) : event.getY(i);
+            count++;
+        }
+        return count == 0 ? 0 : sum / count;
+    }
+
+    private float toX(float x) { return viewport.toDocumentX(x); }
+    private float toY(float y) { return viewport.toDocumentY(y); }
     private float dp(float value) { return value * getResources().getDisplayMetrics().density; }
 
     private void changed() { documentChanged(); if (listener != null) listener.onDrawingChanged(); }
     public void cancelPending() {
         pending = null;
         activePointer = -1;
-        if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(false);
+        gestureActive = false;
+        navigating = false;
+        gestureErasing = false;
+        disallowParentInterception(false);
         invalidate();
+    }
+
+    private void disallowParentInterception(boolean disallow) {
+        if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(disallow);
     }
 
     @Override public boolean performClick() { super.performClick(); return true; }
