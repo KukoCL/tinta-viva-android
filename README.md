@@ -1,2 +1,82 @@
-# tinta-viva-android
-Aplicación vibe coded para dibujar líneas animadas
+# Tinta Viva
+
+Una pequeña app nativa de Android para dibujar con líneas que parecen cobrar vida. Interfaz en español, un pincel redondo, dos capas y un efecto de animación inspirado en las caricaturas dibujadas a mano.
+
+## Qué hace
+
+- **Sketch:** capa inferior, con colores libres.
+- **Line art:** capa superior. Cada trazo comienza a moverse en cuanto levantas el dedo o el lápiz.
+- Al seleccionar **Line art**, el sketch se muestra al **40 % de opacidad**: 0 % sería invisible y 100 % completamente opaco. Al volver a Sketch recupera el 100 %.
+- Paleta de colores y selector de cualquier color mediante tono, saturación, luminosidad o código hexadecimal.
+- Un solo tipo de pincel, con grosor ajustable.
+- **Goma de trazos:** toca un trazo y desaparece entero. Solo afecta a la capa seleccionada y, si varios trazos se cruzan, borra el último dibujado en esa capa.
+- **Deshacer:** revierte tanto trazos nuevos como borrados, incluso después de cambiar de capa. Conserva hasta 128 acciones durante la sesión.
+- Guardado automático de un dibujo en el dispositivo. Conserva las dos capas, los colores y la animación al volver a abrir la app.
+- Distribución adaptada a orientación vertical, horizontal y pantallas grandes.
+
+No requiere cuenta, conexión a Internet ni permisos de almacenamiento. El archivo se guarda en el espacio privado de la app. Esta primera versión trabaja con un solo lienzo; no incluye galería ni exportación de imágenes o vídeos. El historial de deshacer se conserva al girar la pantalla y se reinicia cuando Android termina el proceso.
+
+## Compilar en Windows con Android Studio
+
+1. Instala **Android Studio Ladybug (2024.2.1) o posterior** desde [developer.android.com/studio](https://developer.android.com/studio).
+2. Descarga este repositorio como ZIP y extráelo, o clónalo con Git. Abre la carpeta que contiene `settings.gradle` desde **Open** en Android Studio.
+3. En **SDK Manager**, instala **Android SDK Platform 35** y **Android SDK Build-Tools 34.0.0**. Acepta las licencias cuando se solicite.
+4. En **Settings → Build, Execution, Deployment → Build Tools → Gradle**, selecciona un **Gradle JDK 17 o 21**. El JDK 21 incluido en Android Studio es compatible.
+5. Espera a que termine la sincronización de Gradle. La primera vez necesita Internet para descargar las herramientas y dependencias.
+6. Selecciona **Build → Build App Bundle(s) / APK(s) → Build APK(s)**. En algunas versiones aparece como **Build → Generate App Bundles or APKs → Generate APKs**.
+
+El APK instalable de prueba se genera en:
+
+```text
+app\build\outputs\apk\debug\app-debug.apk
+```
+
+Puedes copiarlo a tu teléfono e instalarlo autorizando la instalación desde esa aplicación, o conectar el teléfono con depuración USB y pulsar **Run** en Android Studio. Requiere **Android 8.0 o posterior**.
+
+### Compilar desde PowerShell
+
+Con Android Studio y el SDK instalados, abre PowerShell en la carpeta del proyecto. Si Java no está en el PATH, puedes utilizar el JDK que trae Android Studio:
+
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+.\gradlew.bat testDebugUnitTest lintDebug assembleDebug
+```
+
+También puedes ejecutar `compilar-windows.bat`, que realiza esas mismas comprobaciones y genera el APK. No necesitas instalar Gradle: se incluye su wrapper oficial.
+
+Si el SDK está en otra carpeta, configura `ANDROID_HOME` con su ubicación, o deja que Android Studio cree `local.properties`. Ese archivo contiene rutas de tu equipo y no se sube a Git.
+
+El APK de `debug` ya está firmado para instalarlo y probarlo. Para distribuir una versión definitiva, usa **Build → Generate Signed App Bundle / APK → APK** y crea tu propia clave de firma. Guarda esa clave para poder publicar actualizaciones; no la subas al repositorio.
+
+## APK desde GitHub
+
+El workflow **Compilar APK** ejecuta las pruebas, Android Lint y la compilación en cada push. También se puede iniciar desde **Actions → Compilar APK → Run workflow**. Cuando termine correctamente, descarga el artefacto **tinta-viva-apk** y extrae el APK de su ZIP.
+
+## Cómo se anima
+
+El documento guarda los trazos como puntos vectoriales en un lienzo de 1080 × 1350. La pantalla ajusta su escala sin modificar el dibujo. Al terminar un trazo de line art se muestran ocho variantes que se repiten a ocho fotogramas por segundo. Cada variante deforma suavemente los puntos a lo largo del trazo, con una semilla distinta para cada línea y un desplazamiento máximo de 3,2 unidades por eje. Los originales nunca cambian: la animación no acumula desplazamiento y el sketch permanece inmóvil.
+
+Las geometrías se reutilizan entre fotogramas. La animación se detiene cuando la actividad pasa a segundo plano. La goma comprueba la geometría del fotograma visible para poder tocar las líneas animadas.
+
+## Estructura y comprobaciones
+
+```text
+app/src/main/java/com/kukocl/tintaviva/
+  core/                 Documento, trazos, animación, goma e historial
+  DrawingView.java      Lienzo, renderizado y entrada táctil/lápiz
+  MainActivity.java     Interfaz del estudio
+  ColorPickerDialog.java
+  DocumentStore.java    Guardado JSON atómico en segundo plano
+app/src/test/           Pruebas del motor sin dependencias de la interfaz
+docs/PRUEBAS-MANUALES.md
+.github/workflows/android.yml
+```
+
+Tecnología: Java 17, Android SDK 35, Android Gradle Plugin 8.7.3 y Gradle 8.9. La app no depende de librerías externas en tiempo de ejecución. JUnit se utiliza únicamente para las pruebas.
+
+```powershell
+.\gradlew.bat testDebugUnitTest lintDebug assembleDebug
+```
+
+Las pruebas verifican opacidad, separación de capas, colores, borrado completo, orden de superposición al deshacer, restauración de documentos, puntos aislados, muestreo de entrada y animación determinista sin deriva. La guía de pruebas manuales cubre los gestos y la apariencia en un dispositivo.
