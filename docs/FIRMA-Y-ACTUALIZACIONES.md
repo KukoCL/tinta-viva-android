@@ -32,8 +32,8 @@ En PowerShell, selecciona la copia privada de la clave y configura los valores s
 ```powershell
 $env:TINTA_VIVA_KEYSTORE_PATH = 'C:\ruta-privada\tinta-viva.p12'
 $env:TINTA_VIVA_KEYSTORE_PASSWORD = Get-Content 'C:\ruta-privada\TINTA_VIVA_KEYSTORE_PASSWORD.txt' -Raw
-$env:TINTA_VIVA_VERSION_CODE = '2000' # Debe superar la versión instalada; no reutilices un número inferior.
+$env:TINTA_VIVA_VERSION_CODE = Read-Host 'versionCode del último APK de Actions (archivo version.txt)'
 .\gradlew.bat testDebugUnitTest lintDebug lintRelease assembleRelease
 ```
 
-El APK se genera en `app\build\outputs\apk\release\app-release.apk`. Usa siempre esta misma clave para distribuir actualizaciones. No es necesario configurar la firma permanente para ejecutar las pruebas o compilar `debug`.
+El APK se genera en `app\build\outputs\apk\release\app-release.apk`. Para una compilación local usa el mismo número del último APK de Actions: Android admite actualizar con el mismo número y la próxima ejecución del workflow seguirá avanzando. No adelantes números arbitrarios que puedan superar las próximas compilaciones automáticas. Usa siempre esta misma clave para distribuir actualizaciones. No es necesario configurar la firma permanente para ejecutar las pruebas o compilar `debug`.
