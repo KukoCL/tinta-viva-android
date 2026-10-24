@@ -62,11 +62,11 @@ También puedes ejecutar `compilar-windows.bat`, que realiza esas mismas comprob
 
 Si el SDK está en otra carpeta, configura `ANDROID_HOME` con su ubicación, o deja que Android Studio cree `local.properties`. Ese archivo contiene rutas de tu equipo y no se sube a Git.
 
-El APK de `debug` ya está firmado para instalarlo y probarlo. Para distribuir una versión definitiva, usa **Build → Generate Signed App Bundle / APK → APK** y crea tu propia clave de firma. Guarda esa clave para poder publicar actualizaciones; no la subas al repositorio.
+El APK de `debug` está firmado para desarrollo. Las actualizaciones de distribución deben usar siempre la firma permanente descrita en [Firma y actualizaciones](docs/FIRMA-Y-ACTUALIZACIONES.md). Usa la misma clave en Android Studio o al compilar `release`; crear una nueva impediría actualizar las instalaciones anteriores. Conserva la clave fuera del repositorio.
 
 ## APK desde GitHub
 
-El workflow **Compilar APK** ejecuta las pruebas, Android Lint y la compilación en cada push. También se puede iniciar desde **Actions → Compilar APK → Run workflow**. Cuando termine correctamente, descarga el artefacto **tinta-viva-apk** y extrae el APK de su ZIP.
+El workflow **Compilar APK** ejecuta las pruebas y Android Lint en cada push. También se puede iniciar desde **Actions → Compilar APK → Run workflow**. Los APK descargables se compilan como `release` con una firma privada permanente y versiones crecientes, para permitir actualizaciones sin desinstalar. La firma se valida antes y después de compilar. Si faltan sus secretos, el workflow comprueba el código y el empaquetado, pero no publica APK. Consulta [la configuración inicial y la migración de las instalaciones anteriores](docs/FIRMA-Y-ACTUALIZACIONES.md). Cuando esté configurada, descarga **tinta-viva-apk** y extrae su APK.
 
 ## Cómo se anima
 

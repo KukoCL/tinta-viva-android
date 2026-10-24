@@ -5,5 +5,8 @@ local.properties
 **/build/
 *.jks
 *.keystore
+*.p12
+signing-private/
+__pycache__/
 .DS_Store
 captures/

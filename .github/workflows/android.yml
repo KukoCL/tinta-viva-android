@@ -22,14 +22,49 @@ jobs:
           packages: 'platform-tools platforms;android-35 build-tools;34.0.0'
           log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
-      - name: Pruebas, análisis y APK
+      - name: Pruebas y análisis
         run: |
           chmod +x gradlew
+          python3 -m unittest discover -s scripts -p 'test_*.py'
           ./gradlew testDebugUnitTest lintDebug assembleDebug --no-daemon
+      - name: Restaurar y verificar la firma permanente
+        id: signing
+        env:
+          TINTA_VIVA_KEYSTORE_BASE64: ${{ secrets.TINTA_VIVA_KEYSTORE_BASE64 }}
+          TINTA_VIVA_KEYSTORE_PASSWORD: ${{ secrets.TINTA_VIVA_KEYSTORE_PASSWORD }}
+        run: python3 scripts/prepare_signing.py --output "$RUNNER_TEMP/tinta-viva.p12"
+      - name: Verificar compilación de distribución sin publicar APK
+        if: steps.signing.outputs.ready != 'true'
+        env:
+          TINTA_VIVA_KEYSTORE_PASSWORD: ci-verification-only
+        run: |
+          keytool -genkeypair -keystore "$RUNNER_TEMP/ci-test.p12" -storetype PKCS12 -alias tinta-viva -keyalg RSA -keysize 2048 -validity 1 -dname "CN=CI verification only" -storepass:env TINTA_VIVA_KEYSTORE_PASSWORD
+          TINTA_VIVA_KEYSTORE_PATH="$RUNNER_TEMP/ci-test.p12" ./gradlew lintRelease assembleRelease --no-daemon
+          echo "No hay APK descargable: configura los secretos indicados en docs/FIRMA-Y-ACTUALIZACIONES.md." >> "$GITHUB_STEP_SUMMARY"
+      - name: Compilar y verificar APK con firma permanente
+        if: steps.signing.outputs.ready == 'true'
+        env:
+          TINTA_VIVA_KEYSTORE_PASSWORD: ${{ secrets.TINTA_VIVA_KEYSTORE_PASSWORD }}
+        run: |
+          ./gradlew lintRelease assembleRelease --no-daemon
+          mkdir -p distribution
+          cp app/build/outputs/apk/release/app-release.apk "distribution/tinta-viva-$TINTA_VIVA_VERSION_CODE.apk"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk > distribution/firma.txt
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          expected = Path('signing/certificate.sha256').read_text().strip().lower()
+          report = Path('distribution/firma.txt').read_text()
+          actual = re.search(r'certificate SHA-256 digest: ([a-fA-F0-9]+)', report)
+          if actual is None or actual.group(1).lower() != expected:
+              raise SystemExit('El APK no tiene la firma permanente; se cancela la publicación.')
+          Path('distribution/version.txt').write_text('versionCode=' + os.environ['TINTA_VIVA_VERSION_CODE'] + '\n')
+          PY
       - uses: actions/upload-artifact@v4
+        if: steps.signing.outputs.ready == 'true'
         with:
           name: tinta-viva-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: distribution/
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
@@ -38,3 +73,7 @@ jobs:
           path: |
             app/build/reports/tests/
             app/build/reports/lint-results-debug.html
+            app/build/reports/lint-results-release.html
+      - name: Retirar las claves del entorno temporal
+        if: always()
+        run: rm -f "$RUNNER_TEMP/tinta-viva.p12" "$RUNNER_TEMP/ci-test.p12"
