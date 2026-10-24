@@ -167,7 +167,7 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams redoParams = params(48, 48);
         redoParams.leftMargin = dp(4);
         header.addView(redoButton, redoParams);
-        fileButton = iconButton("save", "Guardar y opciones del lienzo");
+        fileButton = iconButton("menu", "Opciones del lienzo");
         fileButton.setId(R.id.action_file_menu);
         fileButton.setOnClickListener(this::showFileMenu);
         LinearLayout.LayoutParams fileParams = params(48, 48);

@@ -36,11 +36,11 @@ final class StudioIcon extends View {
         paint.setStyle(Paint.Style.STROKE);
         Path path = new Path();
         switch (kind) {
-            case "save":
-                path.moveTo(3, 3); path.lineTo(17, 3); path.lineTo(21, 7);
-                path.lineTo(21, 21); path.lineTo(3, 21); path.close();
-                path.moveTo(6, 3); path.lineTo(6, 10); path.lineTo(16, 10); path.lineTo(16, 3);
-                path.moveTo(7, 21); path.lineTo(7, 14); path.lineTo(17, 14); path.lineTo(17, 21);
+            case "menu":
+                paint.setStyle(Paint.Style.FILL);
+                path.addCircle(12, 5, 1.8f, Path.Direction.CW);
+                path.addCircle(12, 12, 1.8f, Path.Direction.CW);
+                path.addCircle(12, 19, 1.8f, Path.Direction.CW);
                 break;
             case "motion":
                 path.moveTo(3, 12); path.cubicTo(6, 2, 9, 2, 12, 12);
