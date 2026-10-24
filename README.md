@@ -15,8 +15,10 @@ Una pequeña app nativa de Android para dibujar con líneas que parecen cobrar v
 - **Zoom de 1× a 8×:** pellizca con dos dedos para ampliar o reducir. Mueve ambos dedos juntos para desplazar el lienzo ampliado. Pellizca hacia dentro hasta 1× para volver a ver la página completa.
 - Los gestos de dos dedos no dibujan ni borran. Si colocas el segundo dedo mientras un trazo está en curso, ese borrador de trazo se descarta y empieza la navegación. Al levantar los dedos, puedes iniciar un trazo nuevo normalmente.
 - **Deshacer:** revierte tanto trazos nuevos como borrados, incluso después de cambiar de capa. Conserva hasta 128 acciones durante la sesión.
+- **Nuevo dibujo:** botón de hoja con un signo + junto a Deshacer, separado por 20 dp. Pide confirmación antes de borrar las dos capas y el historial. Vuelve a Sketch, selecciona el pincel y muestra la página completa; conserva el color y el grosor elegidos. El lienzo vacío se guarda automáticamente.
 - Guardado automático de un dibujo en el dispositivo. Conserva las dos capas, los colores y la animación al volver a abrir la app.
 - Distribución adaptada a orientación vertical, horizontal y pantallas grandes.
+- En vertical, teléfonos y tablets usan todo el ancho para el lienzo, con las capas arriba y las herramientas abajo. El panel lateral se utiliza en horizontal a partir de 600 dp de ancho. Los botones de herramientas conservan su tamaño compacto de 48 dp.
 
 La versión **1.1.0** amplía el espacio disponible para el lienzo al retirar la línea de ayuda, compactar la cabecera y reunir las herramientas en una sola fila. El zoom y el desplazamiento no modifican el tamaño de los trazos guardados y se conservan durante la rotación de pantalla en la misma sesión.
 
@@ -91,3 +93,4 @@ Tecnología: Java 17, Android SDK 35, Android Gradle Plugin 8.7.3 y Gradle 8.9. 
 ```
 
 Las pruebas verifican opacidad, vista de solo line art, separación de capas, colores, borrado completo, orden de superposición al deshacer, restauración de documentos, puntos aislados, muestreo de entrada y animación determinista sin deriva. También comprueban el foco y los límites del zoom, las coordenadas al dibujar y borrar después de ampliar, la cancelación de trazos al pellizcar y que la goma no borre durante esos gestos. Las pruebas del grosor animado comprueban su variación local y temporal, sus límites y el borrado de zonas finas y gruesas; las pruebas gráficas de Skia verifican los píxeles del contorno, las uniones redondeadas y los giros cerrados. La guía de pruebas manuales cubre los gestos y la apariencia en un dispositivo.
+

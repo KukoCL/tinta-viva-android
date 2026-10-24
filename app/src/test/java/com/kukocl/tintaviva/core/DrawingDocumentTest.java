@@ -131,4 +131,23 @@ public class DrawingDocumentTest {
         document.snapshot().clear();
         assertEquals(1, document.getStrokes().size());
     }
+
+    @Test public void clearingRemovesBothLayersAndTheUndoHistoryIncludingErasedStrokes() {
+        document.addStroke(0xff123456, 10, LINE);
+        document.setActiveLayer(Layer.LINE_ART);
+        document.addStroke(0xffabcdef, 12, LINE);
+        document.setActiveLayer(Layer.SKETCH);
+        assertTrue(document.eraseAt(200, 100, 0, 0));
+        document.clear();
+        assertTrue(document.getStrokes().isEmpty());
+        assertFalse(document.hasAnimatedStrokes());
+        assertFalse(document.canUndo());
+        assertFalse(document.undo());
+        Stroke fresh = document.addStroke(0xff000000, 5, LINE);
+        assertEquals(1, fresh.id);
+        assertTrue(document.undo());
+        assertTrue(document.getStrokes().isEmpty());
+        assertFalse(document.undo());
+    }
 }
+

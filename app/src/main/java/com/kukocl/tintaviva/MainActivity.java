@@ -1,6 +1,7 @@
 package com.kukocl.tintaviva;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Color;
@@ -39,6 +40,7 @@ public final class MainActivity extends Activity {
     private int brushWidth;
     private boolean erasing;
     private boolean wasSaveErrorShown;
+    private AlertDialog newDrawingDialog;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -80,8 +82,10 @@ public final class MainActivity extends Activity {
             updateControls();
             session.store.save(document.snapshot());
         });
-        boolean sidePanel = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE
-                || getResources().getConfiguration().screenWidthDp >= 720;
+        Configuration configuration = getResources().getConfiguration();
+        // Portrait tablets need the full width for the paper, just like phones.
+        boolean sidePanel = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+                && configuration.screenWidthDp >= 600;
         if (sidePanel) {
             LinearLayout body = horizontal();
             body.addView(drawingView, new LinearLayout.LayoutParams(0, -1, 1));
@@ -121,6 +125,7 @@ public final class MainActivity extends Activity {
         title.addView(name);
         header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
         undoButton = iconButton("undo", "Deshacer");
+        undoButton.setId(R.id.action_undo);
         undoButton.setOnClickListener(view -> {
             drawingView.cancelPending();
             if (document.undo()) {
@@ -131,7 +136,34 @@ public final class MainActivity extends Activity {
         });
         undoButton.setContentDescription("Deshacer la última acción, también si fue borrar un trazo");
         header.addView(undoButton, params(48, 48));
+        LinearLayout newDrawingButton = iconButton("new", "Nuevo dibujo");
+        newDrawingButton.setId(R.id.action_new_drawing);
+        newDrawingButton.setOnClickListener(view -> confirmNewDrawing());
+        LinearLayout.LayoutParams newDrawingParams = params(48, 48);
+        newDrawingParams.leftMargin = dp(20);
+        header.addView(newDrawingButton, newDrawingParams);
         return header;
+    }
+
+    private void confirmNewDrawing() {
+        if (newDrawingDialog != null && newDrawingDialog.isShowing()) return;
+        drawingView.cancelPending();
+        newDrawingDialog = new AlertDialog.Builder(this)
+                .setTitle("¿Empezar un dibujo nuevo?")
+                .setMessage("Se borrarán todos los trazos de Sketch y Line art. Esta acción no se puede deshacer.")
+                .setNegativeButton("Cancelar", null)
+                .setPositiveButton("Nuevo dibujo", (dialog, which) -> {
+                    drawingView.cancelPending();
+                    document.clear();
+                    session.viewport.reset();
+                    drawingView.documentChanged();
+                    selectLayer(Layer.SKETCH);
+                    selectTool(false);
+                    session.store.save(document.snapshot());
+                })
+                .create();
+        newDrawingDialog.show();
+        newDrawingDialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus();
     }
 
     private void addLayers(LinearLayout parent) {
@@ -317,4 +349,10 @@ public final class MainActivity extends Activity {
         session.store.setErrorListener(null);
         super.onPause();
     }
+
+    @Override protected void onDestroy() {
+        if (newDrawingDialog != null) newDrawingDialog.dismiss();
+        super.onDestroy();
+    }
 }
+

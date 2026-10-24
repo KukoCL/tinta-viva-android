@@ -36,6 +36,13 @@ final class StudioIcon extends View {
         paint.setStyle(Paint.Style.STROKE);
         Path path = new Path();
         switch (kind) {
+            case "new":
+                path.moveTo(4, 3); path.lineTo(14, 3); path.lineTo(20, 9);
+                path.lineTo(20, 21); path.lineTo(4, 21); path.close();
+                path.moveTo(14, 3); path.lineTo(14, 9); path.lineTo(20, 9);
+                path.moveTo(8, 15); path.lineTo(16, 15);
+                path.moveTo(12, 11); path.lineTo(12, 19);
+                break;
             case "undo":
                 path.moveTo(8, 5); path.lineTo(3, 10); path.lineTo(8, 15);
                 path.moveTo(4, 10); path.lineTo(14, 10);
@@ -83,3 +90,4 @@ final class StudioIcon extends View {
         canvas.restoreToCount(saved);
     }
 }
+

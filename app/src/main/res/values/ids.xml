@@ -1,4 +1,6 @@
 <resources>
+    <item name="action_undo" type="id" />
+    <item name="action_new_drawing" type="id" />
     <item name="drawing_canvas" type="id" />
     <item name="layer_sketch" type="id" />
     <item name="layer_line_art" type="id" />
@@ -7,3 +9,4 @@
     <item name="tool_eraser" type="id" />
     <item name="tool_color" type="id" />
 </resources>
+

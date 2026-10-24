@@ -38,6 +38,16 @@ public final class CanvasViewport {
     }
 
     public float getScale() { return fitScale * zoom; }
+
+    /** Show the complete page again when starting a new drawing. */
+    public void reset() {
+        zoom = MIN_ZOOM;
+        if (!ready) return;
+        left = (viewWidth - DrawingDocument.WIDTH * getScale()) / 2;
+        top = (viewHeight - DrawingDocument.HEIGHT * getScale()) / 2;
+        constrain();
+    }
+
     public float getZoom() { return zoom; }
     public float getLeft() { return left; }
     public float getTop() { return top; }
@@ -62,3 +72,4 @@ public final class CanvasViewport {
         return Math.max(viewSize - margin - documentSize, Math.min(margin, origin));
     }
 }
+

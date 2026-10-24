@@ -63,6 +63,13 @@ public final class DrawingDocument {
         return true;
     }
 
+    /** Start an empty document without allowing undo to bring back the previous drawing. */
+    public void clear() {
+        strokes.clear();
+        history.clear();
+        nextId = 1;
+    }
+
     /** History belongs to this editing session; drawing content survives app restarts. */
     public void restore(List<Stroke> savedStrokes) {
         Set<Long> ids = new HashSet<>();
@@ -95,3 +102,4 @@ public final class DrawingDocument {
         }
     }
 }
+
