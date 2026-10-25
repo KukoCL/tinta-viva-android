@@ -3,8 +3,12 @@ package com.kukocl.tintaviva;
 import android.app.AlertDialog;
 import android.graphics.Rect;
 import android.os.Looper;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.PopupMenu;
+import android.widget.PopupWindow;
+import android.widget.SeekBar;
 
 import com.kukocl.tintaviva.core.Layer;
 
@@ -17,6 +21,7 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.GraphicsMode;
 import org.robolectric.shadows.ShadowAlertDialog;
 import org.robolectric.shadows.ShadowPopupMenu;
 
@@ -72,6 +77,147 @@ public class MainActivityTest {
 
     @Test public void phoneKeepsLayersAboveAndToolsBelowTheCanvas() {
         assertPortraitLayout(360, 640);
+    }
+
+    @Test @Config(sdk = {26, 28, 35})
+    public void phoneOpensAWideBrushPanelWithTheSampleAboveTheSlider() {
+        layoutAt(360, 640);
+        assertNull(activity.findViewById(R.id.brush_size_slider));
+        PopupWindow popup = openBrushSizePanel();
+        assertEquals(344, popup.getWidth());
+        View panel = popup.getContentView();
+        panel.measure(View.MeasureSpec.makeMeasureSpec(popup.getWidth(), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        panel.layout(0, 0, panel.getMeasuredWidth(), panel.getMeasuredHeight());
+        View slider = panel.findViewById(R.id.brush_size_slider);
+        View preview = panel.findViewById(R.id.brush_size_preview);
+        assertTrue(slider.getWidth() >= 320);
+        assertTrue(preview.getBottom() <= ((View) preview.getParent()).getHeight());
+        assertTrue(((View) preview.getParent()).getBottom() <= slider.getTop());
+        assertTrue(activity.findViewById(R.id.tool_brush_size).isSelected());
+        popup.dismiss();
+        assertFalse(activity.findViewById(R.id.tool_brush_size).isSelected());
+        assertNull(activity.findViewById(R.id.brush_size_slider));
+    }
+
+    @Test public void brushPanelChangesTheNextStrokeAndRemembersTheWidthAfterRecreation() {
+        layoutAt(360, 640);
+        PopupWindow popup = openBrushSizePanel();
+        SeekBar slider = popup.getContentView().findViewById(R.id.brush_size_slider);
+        for (int i = 0; i < 30; i++) {
+            slider.onKeyDown(KeyEvent.KEYCODE_DPAD_RIGHT, new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT));
+        }
+        assertEquals(32, session.getSharedPreferences("studio", 0).getInt("width", -1));
+        popup.dismiss();
+        controller.recreate();
+        activity = controller.get();
+        layoutAt(360, 640);
+        popup = openBrushSizePanel();
+        slider = popup.getContentView().findViewById(R.id.brush_size_slider);
+        assertEquals(30, slider.getProgress());
+        popup.dismiss();
+        DrawingView canvas = activity.findViewById(R.id.drawing_canvas);
+        touch(canvas, MotionEvent.ACTION_DOWN, canvas.getWidth() / 2f, canvas.getHeight() / 2f);
+        touch(canvas, MotionEvent.ACTION_UP, canvas.getWidth() / 2f, canvas.getHeight() / 2f);
+        assertEquals(32, session.document.getStrokes().get(0).width, 0);
+    }
+
+    @Test @Config(qualifiers = "w320dp-h568dp-port-mdpi")
+    public void theFiveBottomButtonsFitOnANarrowPhoneWithoutShrinkingTheirTouchTargets() {
+        layoutAt(320, 568);
+        int previousRight = 8;
+        for (int id : new int[]{R.id.tool_brush, R.id.tool_eraser, R.id.tool_color,
+                R.id.tool_eyedropper, R.id.tool_brush_size}) {
+            Rect button = bounds(activity.findViewById(id));
+            assertTrue(button.left >= previousRight);
+            assertTrue(button.right <= 312);
+            assertEquals(48, button.width());
+            assertEquals(48, button.height());
+            previousRight = button.right;
+        }
+        PopupWindow popup = openBrushSizePanel();
+        assertEquals(304, popup.getWidth());
+        popup.dismiss();
+    }
+
+    @Test @Config(qualifiers = "w600dp-h960dp-port-mdpi")
+    public void tabletKeepsTheSliderAndLineSampleVisibleBelowTheCanvas() {
+        layoutAt(600, 960);
+        assertNull(activity.findViewById(R.id.tool_brush_size));
+        View slider = activity.findViewById(R.id.brush_size_slider);
+        View preview = activity.findViewById(R.id.brush_size_preview);
+        assertTrue(slider.isShown());
+        assertTrue(preview.isShown());
+        assertTrue(slider.getWidth() >= 350);
+        assertTrue(bounds(activity.findViewById(R.id.drawing_canvas)).bottom <= bounds(preview).top);
+        assertTrue(bounds(preview).bottom <= bounds(slider).top);
+    }
+
+    @Test @Config(qualifiers = "w1280dp-h800dp-land-mdpi")
+    public void landscapeTabletGivesTheSliderTheFullSidePanelWidth() {
+        layoutAt(1280, 800);
+        View slider = activity.findViewById(R.id.brush_size_slider);
+        assertTrue(slider.isShown());
+        assertTrue(slider.getWidth() >= 250);
+        assertTrue(bounds(activity.findViewById(R.id.tool_eyedropper)).bottom <= bounds(slider).top);
+    }
+
+    @Test @Config(qualifiers = "w640dp-h360dp-land-mdpi")
+    public void aLandscapePhoneStillUsesAWidePopupForBrushSize() {
+        layoutAt(640, 360);
+        assertNull(activity.findViewById(R.id.brush_size_slider));
+        PopupWindow popup = openBrushSizePanel();
+        assertEquals(624, popup.getWidth());
+        popup.dismiss();
+    }
+
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    public void eyedropperOnlyAppliesAndPersistsTheColorOnReleaseThenReturnsToTheBrush() {
+        layoutAt(360, 640);
+        session.document.addStroke(0xffff0000, 100, new float[]{200, 675, 880, 675});
+        activity.findViewById(R.id.tool_eraser).performClick();
+        activity.findViewById(R.id.tool_eyedropper).performClick();
+        assertTrue(activity.findViewById(R.id.tool_eyedropper).isSelected());
+        assertFalse(activity.findViewById(R.id.tool_eraser).isSelected());
+        DrawingView canvas = activity.findViewById(R.id.drawing_canvas);
+        float x = session.viewport.toScreenX(540), y = session.viewport.toScreenY(675);
+        touch(canvas, MotionEvent.ACTION_DOWN, x, y);
+        assertEquals(0xff29302b, session.getSharedPreferences("studio", 0).getInt("color", 0xff29302b));
+        touch(canvas, MotionEvent.ACTION_UP, x, y);
+        assertEquals(0xffff0000, session.getSharedPreferences("studio", 0).getInt("color", 0));
+        assertTrue(activity.findViewById(R.id.tool_brush).isSelected());
+        assertFalse(activity.findViewById(R.id.tool_eyedropper).isSelected());
+        assertEquals(1, session.document.getStrokes().size());
+        touch(canvas, MotionEvent.ACTION_DOWN, x, y + 50);
+        touch(canvas, MotionEvent.ACTION_UP, x, y + 50);
+        assertEquals(0xffff0000, session.document.getStrokes().get(1).color);
+        controller.recreate();
+        activity = controller.get();
+        assertTrue(activity.findViewById(R.id.tool_color).getContentDescription().toString().contains("#FF0000"));
+    }
+
+    @Test public void togglingTheEyedropperRestoresThePreviousEraserWithoutEditingTheDrawing() {
+        activity.findViewById(R.id.tool_eraser).performClick();
+        activity.findViewById(R.id.tool_eyedropper).performClick();
+        activity.findViewById(R.id.tool_eyedropper).performClick();
+        assertTrue(activity.findViewById(R.id.tool_eraser).isSelected());
+        assertFalse(activity.findViewById(R.id.tool_eyedropper).isSelected());
+        assertTrue(session.document.getStrokes().isEmpty());
+        assertFalse(session.document.canUndo());
+    }
+
+    private PopupWindow openBrushSizePanel() {
+        activity.findViewById(R.id.tool_brush_size).performClick();
+        PopupWindow popup = shadowOf(session).getLatestPopupWindow();
+        assertNotNull(popup);
+        assertTrue(popup.isShowing());
+        return popup;
+    }
+
+    private void touch(DrawingView view, int action, float x, float y) {
+        MotionEvent event = MotionEvent.obtain(1000, 1020, action, x, y, 0);
+        try { assertTrue(view.onTouchEvent(event)); }
+        finally { event.recycle(); }
     }
 
     @Test @Config(qualifiers = "w600dp-h960dp-port-mdpi")
