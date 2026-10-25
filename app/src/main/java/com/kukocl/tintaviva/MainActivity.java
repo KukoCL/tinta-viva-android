@@ -365,15 +365,15 @@ public final class MainActivity extends Activity {
             sizeButton.setOnClickListener(view -> showBrushSizePanel(tools));
             tools.addView(sizeButton, params(48, 48));
         } else {
-            sizeControl = makeBrushSizeControl();
+            sizeControl = makeBrushSizeControl(true);
             if (!sidePanel) tools.addView(sizeControl, new LinearLayout.LayoutParams(0, -2, 1));
         }
         parent.addView(tools, params(-1, -2));
         if (!phone && sidePanel) parent.addView(sizeControl, params(-1, -2));
     }
 
-    private BrushSizeControl makeBrushSizeControl() {
-        return new BrushSizeControl(this, session.viewport, selectedColor, brushWidth, width -> {
+    private BrushSizeControl makeBrushSizeControl(boolean floatingPreview) {
+        return new BrushSizeControl(this, session.viewport, selectedColor, brushWidth, floatingPreview, width -> {
             brushWidth = width;
             drawingView.setBrushWidth(width);
             preferences.edit().putInt("width", width).apply();
@@ -384,7 +384,7 @@ public final class MainActivity extends Activity {
     private void showBrushSizePanel(View anchor) {
         if (sizePopup != null && sizePopup.isShowing()) return;
         drawingView.cancelPending();
-        sizeControl = makeBrushSizeControl();
+        sizeControl = makeBrushSizeControl(false);
         sizeControl.setPadding(dp(8), dp(8), dp(8), dp(8));
         int width = root.getWidth() - root.getPaddingLeft() - root.getPaddingRight();
         sizeControl.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
@@ -523,6 +523,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onPause() {
+        if (sizeControl != null) sizeControl.dismissPreview();
         if (sizePopup != null) sizePopup.dismiss();
         drawingView.setAnimationAllowed(false);
         session.saveDocument();

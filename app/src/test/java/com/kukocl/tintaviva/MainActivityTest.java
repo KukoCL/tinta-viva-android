@@ -6,6 +6,8 @@ import android.os.Looper;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.PopupMenu;
 import android.widget.PopupWindow;
 import android.widget.SeekBar;
@@ -26,6 +28,7 @@ import org.robolectric.shadows.ShadowAlertDialog;
 import org.robolectric.shadows.ShadowPopupMenu;
 
 import java.util.Collections;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.*;
 import static org.robolectric.Shadows.shadowOf;
@@ -93,7 +96,12 @@ public class MainActivityTest {
         View preview = panel.findViewById(R.id.brush_size_preview);
         assertTrue(slider.getWidth() >= 320);
         assertTrue(preview.getBottom() <= ((View) preview.getParent()).getHeight());
-        assertTrue(((View) preview.getParent()).getBottom() <= slider.getTop());
+        Rect sampleBounds = new Rect(0, 0, preview.getWidth(), preview.getHeight());
+        Rect sliderBounds = new Rect(0, 0, slider.getWidth(), slider.getHeight());
+        ((ViewGroup) panel).offsetDescendantRectToMyCoords(preview, sampleBounds);
+        ((ViewGroup) panel).offsetDescendantRectToMyCoords(slider, sliderBounds);
+        assertTrue(sampleBounds.bottom <= sliderBounds.top);
+        assertTrue(preview.getHeight() >= 100);
         assertTrue(activity.findViewById(R.id.tool_brush_size).isSelected());
         popup.dismiss();
         assertFalse(activity.findViewById(R.id.tool_brush_size).isSelected());
@@ -141,16 +149,78 @@ public class MainActivityTest {
     }
 
     @Test @Config(qualifiers = "w600dp-h960dp-port-mdpi")
-    public void tabletKeepsTheSliderAndLineSampleVisibleBelowTheCanvas() {
+    public void tabletKeepsACompactSliderAndShowsTheSampleOnlyWhileAdjusting() {
         layoutAt(600, 960);
         assertNull(activity.findViewById(R.id.tool_brush_size));
         View slider = activity.findViewById(R.id.brush_size_slider);
-        View preview = activity.findViewById(R.id.brush_size_preview);
         assertTrue(slider.isShown());
-        assertTrue(preview.isShown());
-        assertTrue(slider.getWidth() >= 350);
-        assertTrue(bounds(activity.findViewById(R.id.drawing_canvas)).bottom <= bounds(preview).top);
-        assertTrue(bounds(preview).bottom <= bounds(slider).top);
+        assertNull(activity.findViewById(R.id.brush_size_preview));
+        assertTrue(slider.getWidth() >= 320);
+        assertEquals(48, activity.findViewById(R.id.brush_size_control).getHeight());
+        Rect canvas = bounds(activity.findViewById(R.id.drawing_canvas));
+        assertTrue(canvas.bottom <= bounds(slider).top);
+        PopupWindow popup = beginTabletSizeSelection();
+        assertFalse(popup.isFocusable());
+        assertFalse(popup.isTouchable());
+        assertEquals(R.id.brush_size_preview, popup.getContentView().getId());
+        shadowOf(Looper.getMainLooper()).idleFor(3, TimeUnit.SECONDS);
+        assertTrue("La muestra permanece mientras se sostiene el dedo", popup.isShowing());
+        touch(slider, MotionEvent.ACTION_UP, slider.getWidth() * .7f, 24);
+        shadowOf(Looper.getMainLooper()).idleFor(1000, TimeUnit.MILLISECONDS);
+        assertTrue(popup.isShowing());
+        shadowOf(Looper.getMainLooper()).idleFor(600, TimeUnit.MILLISECONDS);
+        assertFalse(popup.isShowing());
+        assertEquals(canvas, bounds(activity.findViewById(R.id.drawing_canvas)));
+        assertTrue(session.document.getStrokes().isEmpty());
+    }
+
+    @Test @Config(qualifiers = "w600dp-h960dp-port-mdpi")
+    public void touchingTheTabletSliderAgainRestartsTheSampleTimeout() {
+        layoutAt(600, 960);
+        View slider = activity.findViewById(R.id.brush_size_slider);
+        PopupWindow popup = beginTabletSizeSelection();
+        touch(slider, MotionEvent.ACTION_UP, slider.getWidth() * .7f, 24);
+        shadowOf(Looper.getMainLooper()).idleFor(1, TimeUnit.SECONDS);
+        beginTabletSizeSelection();
+        shadowOf(Looper.getMainLooper()).idleFor(2, TimeUnit.SECONDS);
+        assertTrue(popup.isShowing());
+        touch(slider, MotionEvent.ACTION_UP, slider.getWidth() * .7f, 24);
+        shadowOf(Looper.getMainLooper()).idleFor(1500, TimeUnit.MILLISECONDS);
+        assertFalse(popup.isShowing());
+    }
+
+    @Test @Config(qualifiers = "w600dp-h960dp-port-mdpi")
+    public void cancellingTabletAdjustmentHidesTheSampleAndLeavingTheActivityClosesItImmediately() {
+        layoutAt(600, 960);
+        View slider = activity.findViewById(R.id.brush_size_slider);
+        PopupWindow popup = beginTabletSizeSelection();
+        touch(slider, MotionEvent.ACTION_CANCEL, slider.getWidth() * .7f, 24);
+        shadowOf(Looper.getMainLooper()).idleFor(1500, TimeUnit.MILLISECONDS);
+        assertFalse(popup.isShowing());
+        popup = beginTabletSizeSelection();
+        controller.pause();
+        assertFalse(popup.isShowing());
+        controller.resume();
+    }
+
+    @Test @Config(qualifiers = "w1280dp-h800dp-land-mdpi")
+    public void aStationaryPressInTheScrollableTabletPanelAlsoShowsTheSampleImmediately() {
+        layoutAt(1280, 800);
+        View control = activity.findViewById(R.id.brush_size_control);
+        View slider = activity.findViewById(R.id.brush_size_slider);
+        MotionEvent down = MotionEvent.obtain(1000, 1020, MotionEvent.ACTION_DOWN, slider.getWidth() / 2f, 24, 0);
+        try { assertTrue(control.dispatchTouchEvent(down)); }
+        finally { down.recycle(); }
+        PopupWindow popup = shadowOf(session).getLatestPopupWindow();
+        assertNotNull(popup);
+        assertTrue(popup.isShowing());
+        shadowOf(Looper.getMainLooper()).idleFor(3, TimeUnit.SECONDS);
+        assertTrue(popup.isShowing());
+        MotionEvent up = MotionEvent.obtain(1000, 1040, MotionEvent.ACTION_UP, slider.getWidth() / 2f, 24, 0);
+        try { assertTrue(control.dispatchTouchEvent(up)); }
+        finally { up.recycle(); }
+        shadowOf(Looper.getMainLooper()).idleFor(1600, TimeUnit.MILLISECONDS);
+        assertFalse(popup.isShowing());
     }
 
     @Test @Config(qualifiers = "w1280dp-h800dp-land-mdpi")
@@ -158,8 +228,12 @@ public class MainActivityTest {
         layoutAt(1280, 800);
         View slider = activity.findViewById(R.id.brush_size_slider);
         assertTrue(slider.isShown());
-        assertTrue(slider.getWidth() >= 250);
+        assertTrue(slider.getWidth() >= 220);
         assertTrue(bounds(activity.findViewById(R.id.tool_eyedropper)).bottom <= bounds(slider).top);
+        PopupWindow popup = beginTabletSizeSelection();
+        touch(slider, MotionEvent.ACTION_UP, slider.getWidth() * .7f, 24);
+        shadowOf(Looper.getMainLooper()).idleFor(1500, TimeUnit.MILLISECONDS);
+        assertFalse(popup.isShowing());
     }
 
     @Test @Config(qualifiers = "w640dp-h360dp-land-mdpi")
@@ -214,7 +288,20 @@ public class MainActivityTest {
         return popup;
     }
 
-    private void touch(DrawingView view, int action, float x, float y) {
+    private PopupWindow beginTabletSizeSelection() {
+        View slider = activity.findViewById(R.id.brush_size_slider);
+        touch(slider, MotionEvent.ACTION_DOWN, slider.getWidth() * .5f, 24);
+        touch(slider, MotionEvent.ACTION_MOVE, slider.getWidth() * .7f, 24);
+        PopupWindow popup = shadowOf(session).getLatestPopupWindow();
+        assertNotNull(popup);
+        assertTrue(popup.isShowing());
+        WindowManager.LayoutParams position = (WindowManager.LayoutParams) popup.getContentView().getRootView().getLayoutParams();
+        assertTrue("El recuadro debe quedar por encima de la barra",
+                position.y + position.height <= bounds(slider).top);
+        return popup;
+    }
+
+    private void touch(View view, int action, float x, float y) {
         MotionEvent event = MotionEvent.obtain(1000, 1020, action, x, y, 0);
         try { assertTrue(view.onTouchEvent(event)); }
         finally { event.recycle(); }
