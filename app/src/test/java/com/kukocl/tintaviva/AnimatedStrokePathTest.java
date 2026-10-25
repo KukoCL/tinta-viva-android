@@ -12,6 +12,10 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.GraphicsMode;
+import org.robolectric.RuntimeEnvironment;
+
+import com.kukocl.tintaviva.core.DrawingDocument;
+import com.kukocl.tintaviva.core.Layer;
 
 import static org.junit.Assert.*;
 
@@ -20,6 +24,20 @@ import static org.junit.Assert.*;
 @Config(sdk = 28, application = Application.class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 public class AnimatedStrokePathTest {
+    @Test public void changingMotionStrengthImmediatelyRebuildsCachedDrawingGeometry() {
+        DrawingDocument document = new DrawingDocument();
+        document.setActiveLayer(Layer.LINE_ART);
+        document.addStroke(Color.BLACK, 12, new float[]{100, 100, 200, 140, 300, 100});
+        DrawingView view = new DrawingView(RuntimeEnvironment.getApplication(), document);
+        view.layout(0, 0, 600, 800);
+        Bitmap strong = renderView(view);
+        view.setStrongMotion(false);
+        Bitmap soft = renderView(view);
+        assertFalse("El cambio de fuerza debe actualizar los trazos que ya estaban dibujados", strong.sameAs(soft));
+        view.setStrongMotion(true);
+        assertTrue(strong.sameAs(renderView(view)));
+    }
+
     @Test public void oneStrokeCanBeThinAtOneEndAndThickAtTheOther() {
         Bitmap image = render(new float[]{100, 100, 300, 100}, new float[]{10, 30});
         assertEquals(Color.WHITE, image.getPixel(110, 110));
@@ -74,6 +92,12 @@ public class AnimatedStrokePathTest {
         paint.setColor(Color.BLACK);
         Path path = AnimatedStrokePath.create(points, widths);
         canvas.drawPath(path, paint);
+        return image;
+    }
+
+    private Bitmap renderView(DrawingView view) {
+        Bitmap image = Bitmap.createBitmap(600, 800, Bitmap.Config.ARGB_8888);
+        view.draw(new Canvas(image));
         return image;
     }
 }

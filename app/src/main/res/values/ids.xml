@@ -1,4 +1,14 @@
 <resources>
+    <item name="action_undo" type="id" />
+    <item name="action_redo" type="id" />
+    <item name="action_motion" type="id" />
+    <item name="motion_soft" type="id" />
+    <item name="motion_strong" type="id" />
+    <item name="action_new_drawing" type="id" />
+    <item name="action_file_menu" type="id" />
+    <item name="action_export_gif" type="id" />
+    <item name="action_import_sketch" type="id" />
+    <item name="action_remove_sketch" type="id" />
     <item name="drawing_canvas" type="id" />
     <item name="layer_sketch" type="id" />
     <item name="layer_line_art" type="id" />

@@ -2,6 +2,11 @@ plugins {
     id 'com.android.application'
 }
 
+def distributionKeystore = System.getenv('TINTA_VIVA_KEYSTORE_PATH')
+def distributionPassword = System.getenv('TINTA_VIVA_KEYSTORE_PASSWORD')
+def distributionSigningReady = distributionKeystore && distributionPassword
+def distributionVersionCode = System.getenv('TINTA_VIVA_VERSION_CODE') ?: '5'
+
 android {
     namespace 'com.kukocl.tintaviva'
     compileSdk 35
@@ -10,8 +15,8 @@ android {
         applicationId 'com.kukocl.tintaviva'
         minSdk 26
         targetSdk 35
-        versionCode 3
-        versionName '1.2.0'
+        versionCode Integer.parseInt(distributionVersionCode)
+        versionName '1.3.1'
     }
 
     compileOptions {
@@ -19,9 +24,22 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
+    signingConfigs {
+        if (distributionSigningReady) {
+            distribution {
+                storeFile file(distributionKeystore)
+                storeType 'PKCS12'
+                storePassword distributionPassword
+                keyAlias 'tinta-viva'
+                keyPassword distributionPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
+            if (distributionSigningReady) signingConfig signingConfigs.distribution
         }
     }
 
@@ -30,7 +48,19 @@ android {
     }
 }
 
+tasks.configureEach {
+    if (name == 'preReleaseBuild') {
+        doFirst {
+            if (!distributionSigningReady) {
+                throw new GradleException('Falta la firma permanente. Consulta docs/FIRMA-Y-ACTUALIZACIONES.md.')
+            }
+        }
+    }
+}
+
 dependencies {
+    implementation 'androidx.core:core:1.15.0'
+    implementation 'com.squareup:gifencoder:0.10.1'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.14.1'
 }

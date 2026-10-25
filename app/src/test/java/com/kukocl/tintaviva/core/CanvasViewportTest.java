@@ -5,6 +5,23 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class CanvasViewportTest {
+    @Test public void resetFitsAndCentersTheWholePageAfterZoomingAndPanning() {
+        CanvasViewport viewport = new CanvasViewport();
+        viewport.resize(800, 1100, 2);
+        float fitScale = viewport.getScale();
+        viewport.transform(4, 400, 550, 200, 300);
+        assertTrue(viewport.getZoom() > 1);
+        viewport.reset();
+        assertEquals(1, viewport.getZoom(), 0);
+        assertEquals(fitScale, viewport.getScale(), 0);
+        assertEquals(400, viewport.toScreenX(DrawingDocument.WIDTH / 2f), .001f);
+        assertEquals(550, viewport.toScreenY(DrawingDocument.HEIGHT / 2f), .001f);
+        assertTrue(viewport.getLeft() >= 2);
+        assertTrue(viewport.getRight() <= 798);
+        assertTrue(viewport.getTop() >= 2);
+        assertTrue(viewport.getBottom() <= 1098);
+    }
+
     private CanvasViewport viewport() {
         CanvasViewport view = new CanvasViewport();
         view.resize(1080, 1350, 0);

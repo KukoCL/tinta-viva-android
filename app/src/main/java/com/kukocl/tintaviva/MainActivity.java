@@ -1,6 +1,10 @@
 package com.kukocl.tintaviva;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Color;
@@ -8,10 +12,14 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.net.Uri;
+import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.Menu;
 import android.view.View;
 import android.view.WindowInsets;
 import android.widget.LinearLayout;
+import android.widget.PopupMenu;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -19,7 +27,9 @@ import android.widget.Toast;
 
 import com.kukocl.tintaviva.core.DrawingDocument;
 import com.kukocl.tintaviva.core.Layer;
+import androidx.core.content.FileProvider;
 
+import java.io.File;
 import java.util.Locale;
 
 public final class MainActivity extends Activity {
@@ -28,17 +38,22 @@ public final class MainActivity extends Activity {
     private static final int BACKGROUND = 0xfff5f3ed;
     private static final int ACTIVE = 0xffdcebcf;
     private static final int DEFAULT_COLOR = 0xff29302b;
+    private static final int PICK_SKETCH_IMAGE = 1001;
     private TintaVivaApp session;
     private DrawingDocument document;
     private DrawingView drawingView;
     private SharedPreferences preferences;
     private LinearLayout sketchCard, lineCard, onlyCard, brushButton, eraserButton, colorButton, undoButton;
+    private LinearLayout redoButton, motionButton, fileButton;
     private TextView sizeValue;
     private StudioIcon colorIcon;
     private int selectedColor;
     private int brushWidth;
     private boolean erasing;
     private boolean wasSaveErrorShown;
+    private AlertDialog newDrawingDialog;
+    private PopupMenu motionMenu;
+    private PopupMenu fileMenu;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -76,12 +91,16 @@ public final class MainActivity extends Activity {
         drawingView.setBrushColor(selectedColor);
         drawingView.setBrushWidth(brushWidth);
         drawingView.setErasing(erasing);
+        drawingView.setStrongMotion(preferences.getBoolean("strongMotion", true));
+        drawingView.setSketchImage(session.sketchImage);
         drawingView.setListener(() -> {
             updateControls();
-            session.store.save(document.snapshot());
+            session.saveDocument();
         });
-        boolean sidePanel = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE
-                || getResources().getConfiguration().screenWidthDp >= 720;
+        Configuration configuration = getResources().getConfiguration();
+        // Portrait tablets need the full width for the paper, just like phones.
+        boolean sidePanel = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+                && configuration.screenWidthDp >= 600;
         if (sidePanel) {
             LinearLayout body = horizontal();
             body.addView(drawingView, new LinearLayout.LayoutParams(0, -1, 1));
@@ -118,20 +137,143 @@ public final class MainActivity extends Activity {
         title.setPadding(dp(10), 0, 0, 0);
         TextView name = text("Tinta Viva", 22, INK, true);
         name.setTypeface(Typeface.create("sans-serif-rounded", Typeface.BOLD));
+        name.setSingleLine(true);
+        name.setAutoSizeTextTypeUniformWithConfiguration(16, 22, 1, TypedValue.COMPLEX_UNIT_SP);
         title.addView(name);
         header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
         undoButton = iconButton("undo", "Deshacer");
+        undoButton.setId(R.id.action_undo);
         undoButton.setOnClickListener(view -> {
             drawingView.cancelPending();
             if (document.undo()) {
                 drawingView.documentChanged();
                 updateControls();
-                session.store.save(document.snapshot());
+                session.saveDocument();
             }
         });
         undoButton.setContentDescription("Deshacer la última acción, también si fue borrar un trazo");
         header.addView(undoButton, params(48, 48));
+        redoButton = iconButton("redo", "Rehacer");
+        redoButton.setId(R.id.action_redo);
+        redoButton.setOnClickListener(view -> {
+            drawingView.cancelPending();
+            if (document.redo()) {
+                drawingView.documentChanged();
+                updateControls();
+                session.saveDocument();
+            }
+        });
+        redoButton.setContentDescription("Rehacer la última acción deshecha, también si fue borrar un trazo");
+        LinearLayout.LayoutParams redoParams = params(48, 48);
+        redoParams.leftMargin = dp(4);
+        header.addView(redoButton, redoParams);
+        fileButton = iconButton("menu", "Opciones del lienzo");
+        fileButton.setId(R.id.action_file_menu);
+        fileButton.setOnClickListener(this::showFileMenu);
+        LinearLayout.LayoutParams fileParams = params(48, 48);
+        fileParams.leftMargin = dp(20);
+        header.addView(fileButton, fileParams);
         return header;
+    }
+
+    private void showFileMenu(View anchor) {
+        drawingView.cancelPending();
+        if (fileMenu != null) fileMenu.dismiss();
+        fileMenu = new PopupMenu(this, anchor, Gravity.END);
+        Menu menu = fileMenu.getMenu();
+        menu.add(Menu.NONE, R.id.action_export_gif, 0, "Guardar GIF / compartir")
+                .setEnabled(!session.isImporting() && !session.isExporting());
+        menu.add(Menu.NONE, R.id.action_import_sketch, 1, "Importar imagen de sketch")
+                .setEnabled(!session.isImporting());
+        menu.add(Menu.NONE, R.id.action_remove_sketch, 2, "Quitar imagen de sketch")
+                .setEnabled(session.sketchImage != null || session.isImporting());
+        menu.add(Menu.NONE, R.id.action_new_drawing, 3, "Nuevo lienzo");
+        fileMenu.setOnMenuItemClickListener(item -> {
+            int id = item.getItemId();
+            if (id == R.id.action_export_gif) {
+                Toast.makeText(this, "Preparando GIF…", Toast.LENGTH_SHORT).show();
+                session.exportGif();
+            } else if (id == R.id.action_import_sketch) {
+                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*")
+                        .addCategory(Intent.CATEGORY_OPENABLE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                try { startActivityForResult(intent, PICK_SKETCH_IMAGE); }
+                catch (ActivityNotFoundException error) {
+                    Toast.makeText(this, "No se encontró una aplicación para seleccionar imágenes.", Toast.LENGTH_LONG).show();
+                }
+            } else if (id == R.id.action_remove_sketch) session.removeSketchImage();
+            else if (id == R.id.action_new_drawing) confirmNewDrawing();
+            else return false;
+            return true;
+        });
+        fileMenu.show();
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != PICK_SKETCH_IMAGE || resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        selectLayer(Layer.SKETCH);
+        selectTool(false);
+        Toast.makeText(this, "Cargando imagen…", Toast.LENGTH_SHORT).show();
+        session.importSketchImage(data.getData());
+    }
+
+    private void refreshMedia() {
+        drawingView.setSketchImage(session.sketchImage);
+        updateControls();
+        String error = session.takeMediaError();
+        if (error != null) Toast.makeText(this, error, Toast.LENGTH_LONG).show();
+        File gif = session.takePendingShare();
+        if (gif == null) return;
+        Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".exports", gif);
+        Intent share = new Intent(Intent.ACTION_SEND).setType("image/gif")
+                .putExtra(Intent.EXTRA_STREAM, uri)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        share.setClipData(ClipData.newUri(getContentResolver(), "Tinta Viva", uri));
+        try { startActivity(Intent.createChooser(share, "Compartir GIF")); }
+        catch (ActivityNotFoundException missing) {
+            Toast.makeText(this, "No se encontró una aplicación para compartir el GIF.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void showMotionPanel(View anchor) {
+        drawingView.cancelPending();
+        if (motionMenu != null) motionMenu.dismiss();
+        motionMenu = new PopupMenu(this, anchor, Gravity.END);
+        Menu menu = motionMenu.getMenu();
+        menu.add(1, R.id.motion_soft, 0, "Movimiento suave").setChecked(!document.isStrongMotion());
+        menu.add(1, R.id.motion_strong, 1, "Movimiento intenso").setChecked(document.isStrongMotion());
+        menu.setGroupCheckable(1, true, true);
+        motionMenu.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() != R.id.motion_soft && item.getItemId() != R.id.motion_strong) return false;
+            boolean strong = item.getItemId() == R.id.motion_strong;
+            drawingView.setStrongMotion(strong);
+            preferences.edit().putBoolean("strongMotion", strong).apply();
+            updateControls();
+            return true;
+        });
+        motionMenu.show();
+    }
+
+    private void confirmNewDrawing() {
+        if (newDrawingDialog != null && newDrawingDialog.isShowing()) return;
+        drawingView.cancelPending();
+        newDrawingDialog = new AlertDialog.Builder(this)
+                .setTitle("¿Crear un lienzo nuevo?")
+                .setMessage("Se borrarán la imagen de sketch y todos los trazos de Sketch y Line art. Esta acción no se puede deshacer.")
+                .setNegativeButton("Cancelar", null)
+                .setPositiveButton("Nuevo lienzo", (dialog, which) -> {
+                    drawingView.cancelPending();
+                    document.clear();
+                    session.removeSketchImage();
+                    session.viewport.reset();
+                    drawingView.documentChanged();
+                    selectLayer(Layer.SKETCH);
+                    selectTool(false);
+                    session.saveDocument();
+                })
+                .create();
+        newDrawingDialog.show();
+        newDrawingDialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus();
     }
 
     private void addLayers(LinearLayout parent) {
@@ -147,6 +289,12 @@ public final class MainActivity extends Activity {
             if (card != onlyCard) cardParams.rightMargin = dp(4);
             row.addView(card, cardParams);
         }
+        motionButton = iconButton("motion", "Movimiento de las líneas");
+        motionButton.setId(R.id.action_motion);
+        motionButton.setOnClickListener(this::showMotionPanel);
+        LinearLayout.LayoutParams motionParams = params(48, 48);
+        motionParams.leftMargin = dp(8);
+        row.addView(motionButton, motionParams);
         LinearLayout.LayoutParams layerParams = params(-1, 48);
         layerParams.bottomMargin = dp(4);
         parent.addView(row, layerParams);
@@ -255,12 +403,16 @@ public final class MainActivity extends Activity {
         styleSelection(brushButton, !erasing);
         styleSelection(eraserButton, erasing);
         sketchCard.setContentDescription("Capa sketch" + (!lineArt ? ", seleccionada" : ""));
-        lineCard.setContentDescription("Capa line art, sketch al 40 por ciento" + (lineCard.isSelected() ? ", seleccionada" : ""));
+        lineCard.setContentDescription("Capa line art, sketch al 30 por ciento" + (lineCard.isSelected() ? ", seleccionada" : ""));
         onlyCard.setContentDescription("Solo line art, sketch oculto" + (document.isLineArtOnly() ? ", seleccionado" : ""));
         colorIcon.setAccentColor(selectedColor);
         colorButton.setContentDescription("Elegir color. Color actual " + hex(selectedColor));
         undoButton.setEnabled(document.canUndo());
         undoButton.setAlpha(document.canUndo() ? 1 : .35f);
+        redoButton.setEnabled(document.canRedo());
+        redoButton.setAlpha(document.canRedo() ? 1 : .35f);
+        motionButton.setContentDescription("Movimiento de las líneas: " + (document.isStrongMotion() ? "intenso" : "suave"));
+        fileButton.setAlpha(session.isExporting() ? .6f : 1);
     }
 
     private void styleSelection(LinearLayout view, boolean selected) {
@@ -309,12 +461,22 @@ public final class MainActivity extends Activity {
             }
         });
         drawingView.setAnimationAllowed(true);
+        session.setMediaListener(this::refreshMedia);
+        refreshMedia();
     }
 
     @Override protected void onPause() {
         drawingView.setAnimationAllowed(false);
-        session.store.save(document.snapshot());
+        session.saveDocument();
         session.store.setErrorListener(null);
+        session.setMediaListener(null);
         super.onPause();
+    }
+
+    @Override protected void onDestroy() {
+        if (newDrawingDialog != null) newDrawingDialog.dismiss();
+        if (motionMenu != null) motionMenu.dismiss();
+        if (fileMenu != null) fileMenu.dismiss();
+        super.onDestroy();
     }
 }

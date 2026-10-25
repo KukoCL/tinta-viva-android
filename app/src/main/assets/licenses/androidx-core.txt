@@ -1,0 +1,6 @@
+AndroidX Core 1.15.0 and AndroidX dependencies
+Copyright The Android Open Source Project
+https://developer.android.com/jetpack/androidx
+
+Licensed under the Apache License, Version 2.0.
+The full Apache 2.0 license is included in licenses/gifencoder.txt in these assets.
