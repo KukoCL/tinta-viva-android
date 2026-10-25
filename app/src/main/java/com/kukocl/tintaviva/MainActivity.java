@@ -331,7 +331,7 @@ public final class MainActivity extends Activity {
 
     private void addTools(LinearLayout parent, boolean sidePanel) {
         LinearLayout tools = horizontal();
-        tools.setGravity(Gravity.CENTER_VERTICAL);
+        tools.setGravity(Gravity.CENTER);
         tools.setPadding(0, dp(4), 0, dp(4));
         brushButton = iconButton("brush", "Pincel");
         brushButton.setId(R.id.tool_brush);
@@ -354,7 +354,7 @@ public final class MainActivity extends Activity {
         });
         for (LinearLayout button : new LinearLayout[]{brushButton, eraserButton, colorButton, eyedropperButton}) {
             LinearLayout.LayoutParams buttonParams = params(48, 48);
-            buttonParams.rightMargin = dp(4);
+            if (button != brushButton) buttonParams.leftMargin = dp(4);
             tools.addView(button, buttonParams);
         }
         Configuration config = getResources().getConfiguration();
@@ -363,10 +363,16 @@ public final class MainActivity extends Activity {
             sizeButton = iconButton("size", "Grosor del pincel");
             sizeButton.setId(R.id.tool_brush_size);
             sizeButton.setOnClickListener(view -> showBrushSizePanel(tools));
-            tools.addView(sizeButton, params(48, 48));
+            LinearLayout.LayoutParams sizeParams = params(48, 48);
+            sizeParams.leftMargin = dp(4);
+            tools.addView(sizeButton, sizeParams);
         } else {
             sizeControl = makeBrushSizeControl(true);
-            if (!sidePanel) tools.addView(sizeControl, new LinearLayout.LayoutParams(0, -2, 1));
+            if (!sidePanel) {
+                LinearLayout.LayoutParams sizeParams = new LinearLayout.LayoutParams(0, -2, 1);
+                sizeParams.leftMargin = dp(4);
+                tools.addView(sizeControl, sizeParams);
+            }
         }
         parent.addView(tools, params(-1, -2));
         if (!phone && sidePanel) parent.addView(sizeControl, params(-1, -2));
