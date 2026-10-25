@@ -7,7 +7,9 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Looper;
+import android.provider.OpenableColumns;
 import android.view.View;
+import android.webkit.MimeTypeMap;
 import android.widget.PopupMenu;
 import androidx.core.content.FileProvider;
 
@@ -32,6 +34,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -50,6 +53,8 @@ public class MediaWorkflowTest {
         session = (TintaVivaApp) RuntimeEnvironment.getApplication();
         // Robolectric assigns a new cache directory per test; Android keeps one per install.
         ((Map<?, ?>) ReflectionHelpers.getStaticField(FileProvider.class, "sCache")).clear();
+        // Android knows GIFs; Robolectric's MIME table starts empty.
+        shadowOf(MimeTypeMap.getSingleton()).addExtensionMimeTypeMapping("gif", "image/gif");
         controller = Robolectric.buildActivity(MainActivity.class).setup();
         activity = controller.get();
     }
@@ -74,7 +79,7 @@ public class MediaWorkflowTest {
         assertFalse(session.isImporting());
     }
 
-    @Test public void completedGifOpensTheAndroidShareChooserWithATemporaryReadableContentUri() throws Exception {
+    @Test public void sharesTheOriginalAnimatedGifAsAFileSoTelegramDoesNotFlattenIt() throws Exception {
         session.document.setActiveLayer(Layer.LINE_ART);
         session.document.addStroke(Color.BLACK, 20, new float[]{100, 100, 700, 700});
         choose(R.id.action_export_gif);
@@ -85,17 +90,35 @@ public class MediaWorkflowTest {
         Intent send = chooser.getParcelableExtra(Intent.EXTRA_INTENT);
         assertNotNull(send);
         assertEquals(Intent.ACTION_SEND, send.getAction());
-        assertEquals("image/gif", send.getType());
+        assertEquals("application/octet-stream", send.getType());
         assertTrue((send.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0);
         Uri uri = send.getParcelableExtra(Intent.EXTRA_STREAM);
         assertEquals("content", uri.getScheme());
         assertEquals(activity.getPackageName() + ".exports", uri.getAuthority());
         assertEquals(uri, send.getClipData().getItemAt(0).getUri());
+        assertEquals("image/gif", activity.getContentResolver().getType(uri));
+        try (android.database.Cursor metadata = activity.getContentResolver().query(uri,
+                new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE}, null, null, null)) {
+            assertNotNull(metadata);
+            assertTrue(metadata.moveToFirst());
+            assertTrue(metadata.getString(0).endsWith(".gif"));
+            assertTrue(metadata.getLong(1) > 0);
+        }
         try (InputStream input = activity.getContentResolver().openInputStream(uri)) {
             assertNotNull(input);
-            byte[] header = new byte[6];
-            assertEquals(6, input.read(header));
-            assertEquals("GIF89a", new String(header, StandardCharsets.US_ASCII));
+            byte[] gif = input.readAllBytes();
+            assertEquals("GIF89a", new String(gif, 0, 6, StandardCharsets.US_ASCII));
+            try (GifExporterTest.GifReader reader = new GifExporterTest.GifReader(gif)) {
+                assertEquals(8, reader.count());
+                assertEquals(540, reader.width());
+                assertEquals(675, reader.height());
+                int[] first = reader.pixels(0);
+                boolean animated = false;
+                for (int frame = 1; frame < reader.count(); frame++) {
+                    if (!Arrays.equals(first, reader.pixels(frame))) animated = true;
+                }
+                assertTrue("El archivo compartido debe conservar la animación", animated);
+            }
         }
     }
 

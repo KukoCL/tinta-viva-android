@@ -42,6 +42,7 @@ public class GifExporterTest {
                 for (int frame = 0; frame < 8; frame++) {
                     Node tree = reader.metadata(frame);
                     Node control = find(tree, "GraphicControlExtension");
+                    assertEquals("doNotDispose", control.getAttributes().getNamedItem("disposalMethod").getNodeValue());
                     delay += Integer.parseInt(control.getAttributes().getNamedItem("delayTime").getNodeValue());
                     int[] pixels = reader.pixels(frame);
                     if (!Arrays.equals(first, pixels)) changed = true;
@@ -55,6 +56,39 @@ public class GifExporterTest {
                 }
                 assertEquals(100, delay);
                 assertTrue("El GIF debe contener animación real", changed);
+        }
+    }
+
+    @Test public void productionSizeGifKeepsAnimationAndReferenceColorsWithMoreThan256SourceColors() throws Exception {
+        Bitmap reference = Bitmap.createBitmap(108, 135, Bitmap.Config.ARGB_8888);
+        for (int y = 0; y < reference.getHeight(); y++) {
+            for (int x = 0; x < reference.getWidth(); x++) {
+                reference.setPixel(x, y, Color.rgb(x * 255 / 107, y * 255 / 134, (x + y) * 255 / 241));
+            }
+        }
+        DrawingDocument document = new DrawingDocument();
+        document.setActiveLayer(Layer.LINE_ART);
+        document.addStroke(Color.BLACK, 50, new float[]{150, 1000, 400, 1100, 800, 1000});
+        document.setActiveLayer(Layer.SKETCH);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try {
+            GifExporter.write(output, new GifExporter.Snapshot(document, reference));
+            try (GifReader reader = new GifReader(output.toByteArray())) {
+                assertEquals(8, reader.count());
+                assertEquals(540, reader.width());
+                assertEquals(675, reader.height());
+                assertFalse(Arrays.equals(reader.pixels(0), reader.pixels(1)));
+                for (int[] point : new int[][]{{50, 100}, {400, 200}, {250, 350}}) {
+                    int expected = reference.getPixel(point[0] / 5, point[1] / 5);
+                    int actual = reader.pixel(0, point[0], point[1]);
+                    assertEquals(Color.red(expected), Color.red(actual), 20);
+                    assertEquals(Color.green(expected), Color.green(actual), 20);
+                    assertEquals(Color.blue(expected), Color.blue(actual), 20);
+                    assertEquals("La referencia debe permanecer inmóvil", actual, reader.pixel(7, point[0], point[1]));
+                }
+            }
+        } finally {
+            reference.recycle();
         }
     }
 
@@ -100,7 +134,7 @@ public class GifExporterTest {
     }
 
     /** Android's compile classpath omits desktop APIs; the independent decoder runs on the test JDK. */
-    private static final class GifReader implements AutoCloseable {
+    static final class GifReader implements AutoCloseable {
         private final Class<?> type = Class.forName("javax.imageio.ImageReader");
         private final Class<?> imageType = Class.forName("java.awt.image.BufferedImage");
         private final Object reader;

@@ -225,7 +225,9 @@ public final class MainActivity extends Activity {
         File gif = session.takePendingShare();
         if (gif == null) return;
         Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".exports", gif);
-        Intent share = new Intent(Intent.ACTION_SEND).setType("image/gif")
+        // Telegram routes image/* through its photo editor, which flattens shared GIFs.
+        // Send the original file; FileProvider still reports its actual image/gif type.
+        Intent share = new Intent(Intent.ACTION_SEND).setType("application/octet-stream")
                 .putExtra(Intent.EXTRA_STREAM, uri)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         share.setClipData(ClipData.newUri(getContentResolver(), "Tinta Viva", uri));

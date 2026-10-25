@@ -27,6 +27,8 @@ La versión **1.1.0** amplía el espacio disponible para el lienzo al retirar la
 
 La versión **1.3.0** añade imágenes de referencia, exportación GIF y el menú de compartir de Android. El GIF contiene ocho fotogramas a 540 × 675, con un bucle de un segundo, fondo blanco, la fuerza de movimiento elegida y las capas visibles en el momento de exportar. Exporta la página completa, independientemente del zoom, sin controles ni mensajes del editor. Al terminar abre el menú de compartir para elegir la aplicación de destino.
 
+Se comparte el archivo original con extensión `.gif` para que Telegram lo reciba como animación y no lo convierta en una foto al abrir su editor de imágenes. La exportación reutiliza una paleta de hasta 256 colores durante todo el bucle y comprime los fotogramas con un diccionario LZW de tamaño limitado, evitando recalcular los colores y crear listas de píxeles durante la compresión de cada fotograma. El sketch permanece inmóvil: para ver animación, el dibujo debe tener trazos en Line art.
+
 La versión **1.2.0** añade variación animada de grosor a cada zona del line art, incluidos los trazos ya guardados. El sketch conserva su grosor original. La goma tiene en cuenta el grosor local del fotograma visible.
 
 No requiere cuenta, conexión a Internet ni permisos generales de almacenamiento. Las imágenes se eligen con el selector de archivos de Android y se copian al espacio privado de la app. Trabaja con un solo lienzo y permite exportarlo como GIF animado; no incluye galería de dibujos ni exportación de vídeo. Los historiales de deshacer y rehacer se conservan al girar la pantalla y se reinician cuando Android termina el proceso.
@@ -84,6 +86,8 @@ app/src/main/java/com/kukocl/tintaviva/
   DrawingView.java      Lienzo y entrada táctil/lápiz
   DrawingRenderer.java  Renderizado común del editor y el GIF
   GifExporter.java      Ocho fotogramas del documento capturado
+  GifPalette.java       Paleta común y búsqueda de colores con caché
+  IndexedGifEncoder.java  Escritura GIF89a y compresión LZW por fotograma
   SketchImages.java     Importación limitada y copia privada de imágenes
   AnimatedStrokePath.java  Contorno del pincel con grosor variable
   MainActivity.java     Interfaz del estudio
@@ -94,7 +98,7 @@ docs/PRUEBAS-MANUALES.md
 .github/workflows/android.yml
 ```
 
-Tecnología: Java 17, Android SDK 35, Android Gradle Plugin 8.7.3 y Gradle 8.9. La exportación utiliza gifencoder 0.10.1 de Square (Apache 2.0), compatible con Android, y AndroidX Core 1.15.0 para compartir el GIF mediante FileProvider con acceso temporal de lectura. JUnit y Robolectric se utilizan únicamente para las pruebas y no se incluyen en el APK. La licencia de gifencoder se incluye en los assets de la app.
+Tecnología: Java 17, Android SDK 35, Android Gradle Plugin 8.7.3 y Gradle 8.9. La paleta de exportación utiliza el cuantizador de gifencoder 0.10.1 de Square (Apache 2.0), con muestreo limitado; la escritura GIF89a y la compresión LZW trabajan con índices de color y buffers reutilizables. AndroidX Core 1.15.0 comparte el archivo mediante FileProvider con acceso temporal de lectura. JUnit y Robolectric se utilizan únicamente para las pruebas y no se incluyen en el APK. La licencia de gifencoder se incluye en los assets de la app.
 
 ```powershell
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug
