@@ -48,10 +48,27 @@ final class StudioIcon extends View {
                 path.moveTo(5, 20); path.lineTo(19, 20);
                 break;
             case "eyedropper":
-                path.moveTo(14, 4); path.lineTo(20, 10);
-                path.moveTo(16, 6); path.lineTo(19, 3); path.lineTo(22, 6); path.lineTo(19, 9);
-                path.moveTo(15, 7); path.lineTo(4, 18); path.lineTo(3, 22);
-                path.lineTo(7, 21); path.lineTo(18, 10);
+                int pipette = canvas.save();
+                canvas.rotate(45, 12, 12);
+                path.moveTo(9.5f, 7); path.lineTo(9.5f, 5.5f);
+                path.arcTo(9.5f, 3, 14.5f, 8, 180, 180, false);
+                path.lineTo(14.5f, 7); path.close();
+                paint.setStyle(Paint.Style.FILL_AND_STROKE);
+                canvas.drawPath(path, paint);
+                path.reset();
+                paint.setStyle(Paint.Style.STROKE);
+                canvas.drawRoundRect(8.5f, 7, 15.5f, 9.5f, .8f, .8f, paint);
+                path.moveTo(10.5f, 9.5f); path.lineTo(10.5f, 16.5f);
+                path.lineTo(12, 19); path.lineTo(13.5f, 16.5f); path.lineTo(13.5f, 9.5f);
+                canvas.drawPath(path, paint);
+                canvas.restoreToCount(pipette);
+                path.reset();
+                paint.setStyle(Paint.Style.FILL);
+                path.moveTo(4.2f, 18.4f);
+                path.cubicTo(3.6f, 19.3f, 2.6f, 20.3f, 2.6f, 21);
+                path.arcTo(2.6f, 19.4f, 5.8f, 22.6f, 180, -180, false);
+                path.cubicTo(5.8f, 20.3f, 4.8f, 19.3f, 4.2f, 18.4f);
+                path.close();
                 break;
             case "menu":
                 paint.setStyle(Paint.Style.FILL);
