@@ -425,7 +425,7 @@ public class MainActivityTest {
         assertTrue(session.document.canRedo());
         PopupMenu menu = openMotionPanel();
         assertEquals(2, menu.getMenu().size());
-        assertTrue(menu.getMenu().findItem(R.id.motion_strong).isChecked());
+        assertTrue(menu.getMenu().findItem(R.id.motion_soft).isChecked());
         assertTrue(menu.getMenu().performIdentifierAction(R.id.motion_soft, 0));
         menu.dismiss();
         assertFalse(session.document.isStrongMotion());

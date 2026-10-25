@@ -97,7 +97,7 @@ public final class MainActivity extends Activity {
         drawingView.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
             if (sizeControl != null) sizeControl.setBrush(selectedColor, brushWidth);
         });
-        drawingView.setStrongMotion(preferences.getBoolean("strongMotion", true));
+        drawingView.setStrongMotion(preferences.getBoolean("strongMotion", false));
         drawingView.setSketchImage(session.sketchImage);
         drawingView.setListener(() -> {
             updateControls();
