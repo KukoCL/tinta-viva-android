@@ -7,11 +7,12 @@ Una pequeña app nativa de Android para dibujar con líneas que parecen cobrar v
 - **Sketch:** capa inferior, con colores libres.
 - **Line art:** capa superior. Cada trazo comienza a moverse en cuanto levantas el dedo o el lápiz.
 - **Grosor vivo:** distintas zonas del mismo trazo se afinan y ensanchan de forma marcada e irregular mientras se mueve. La variación local alcanza como máximo un 55 % del grosor elegido. Las zonas cambian independientemente en cada fotograma, con transiciones suaves entre puntos vecinos.
-- **Fuerza del movimiento:** el botón de onda junto a las capas abre un panel pequeño con Movimiento suave (el nivel original) y Movimiento intenso (el más exagerado). Se aplica también a las líneas ya dibujadas y recuerda la elección al girar o volver a abrir la app. Solo cambia el desplazamiento: la variación irregular de grosor es exactamente la misma en ambos niveles. El nivel inicial es Intenso.
+- **Fuerza del movimiento:** el botón de onda junto a las capas abre un panel pequeño con Movimiento suave (el nivel original) y Movimiento intenso (el más exagerado). Se aplica también a las líneas ya dibujadas y recuerda la elección al girar o volver a abrir la app. Solo cambia el desplazamiento: la variación irregular de grosor es exactamente la misma en ambos niveles. El nivel inicial es Suave.
 - Al seleccionar **Line art**, el sketch se muestra al **30 % de opacidad**: 0 % sería invisible y 100 % completamente opaco. Al volver a Sketch recupera el 100 %.
 - **Solo line art:** tercer botón que oculta el sketch y permite seguir dibujando en la capa superior. El sketch se conserva y vuelve a mostrarse al seleccionar las otras vistas.
-- Barra compacta con iconos de pincel, goma y color. El icono de paleta abre los colores predefinidos y el selector de cualquier color mediante tono, saturación, luminosidad o código hexadecimal.
-- Un solo tipo de pincel, con grosor ajustable.
+- Barra compacta con iconos de pincel, goma, paleta y cuentagotas. La paleta abre los colores predefinidos y el selector de cualquier color mediante tono, saturación, luminosidad o código hexadecimal.
+- **Grosor del pincel:** en teléfonos, el botón de líneas de distinto grosor abre un panel sobre las herramientas, con una barra que aprovecha el ancho disponible de la pantalla. Un trazo curvo con bucles muestra el color y el grosor seleccionados, a la escala de la página completa. Tocar fuera o pulsar Atrás cierra el panel. En tablets, la barra permanece visible en una fila compacta; la muestra aparece en un recuadro flotante sobre la barra mientras ajustas el grosor y desaparece 1,5 segundos después de soltar. Volver a tocar reinicia ese plazo. En horizontal, la barra aprovecha el ancho del panel lateral. El grosor se recuerda al girar y volver a abrir la app.
+- **Cuentagotas:** pulsa el icono de pipeta y mantén el dedo o lápiz sobre el lienzo. Un círculo encima del dedo muestra el color bajo su posición y se actualiza al deslizarlo. Al soltar sobre el papel se selecciona el color, se guarda y se vuelve al pincel. Toma el color visible de las imágenes y capas, incluida su opacidad, y respeta el zoom y el desplazamiento. La animación queda inmóvil durante la selección. Cancelar, soltar fuera del papel o añadir un segundo dedo conserva el color anterior, sin dibujar, borrar ni modificar el historial.
 - **Goma de trazos:** toca y suelta un trazo para borrarlo entero. Solo afecta a la capa seleccionada y, si varios trazos se cruzan, borra el último dibujado en esa capa.
 - **Zoom de 1× a 8×:** pellizca con dos dedos para ampliar o reducir. Mueve ambos dedos juntos para desplazar el lienzo ampliado. Pellizca hacia dentro hasta 1× para volver a ver la página completa.
 - Los gestos de dos dedos no dibujan ni borran. Si colocas el segundo dedo mientras un trazo está en curso, ese borrador de trazo se descarta y empieza la navegación. Al levantar los dedos, puedes iniciar un trazo nuevo normalmente.
@@ -26,6 +27,8 @@ Una pequeña app nativa de Android para dibujar con líneas que parecen cobrar v
 La versión **1.1.0** amplía el espacio disponible para el lienzo al retirar la línea de ayuda, compactar la cabecera y reunir las herramientas en una sola fila. El zoom y el desplazamiento no modifican el tamaño de los trazos guardados y se conservan durante la rotación de pantalla en la misma sesión.
 
 La versión **1.3.0** añade imágenes de referencia, exportación GIF y el menú de compartir de Android. El GIF contiene ocho fotogramas a 540 × 675, con un bucle de un segundo, fondo blanco, la fuerza de movimiento elegida y las capas visibles en el momento de exportar. Exporta la página completa, independientemente del zoom, sin controles ni mensajes del editor. Al terminar abre el menú de compartir para elegir la aplicación de destino.
+
+Se comparte el archivo original con extensión `.gif` para que Telegram lo reciba como animación y no lo convierta en una foto al abrir su editor de imágenes. La exportación reutiliza una paleta de hasta 256 colores durante todo el bucle y comprime los fotogramas con un diccionario LZW de tamaño limitado, evitando recalcular los colores y crear listas de píxeles durante la compresión de cada fotograma. El sketch permanece inmóvil: para ver animación, el dibujo debe tener trazos en Line art.
 
 La versión **1.2.0** añade variación animada de grosor a cada zona del line art, incluidos los trazos ya guardados. El sketch conserva su grosor original. La goma tiene en cuenta el grosor local del fotograma visible.
 
@@ -84,6 +87,8 @@ app/src/main/java/com/kukocl/tintaviva/
   DrawingView.java      Lienzo y entrada táctil/lápiz
   DrawingRenderer.java  Renderizado común del editor y el GIF
   GifExporter.java      Ocho fotogramas del documento capturado
+  GifPalette.java       Paleta común y búsqueda de colores con caché
+  IndexedGifEncoder.java  Escritura GIF89a y compresión LZW por fotograma
   SketchImages.java     Importación limitada y copia privada de imágenes
   AnimatedStrokePath.java  Contorno del pincel con grosor variable
   MainActivity.java     Interfaz del estudio
@@ -94,7 +99,7 @@ docs/PRUEBAS-MANUALES.md
 .github/workflows/android.yml
 ```
 
-Tecnología: Java 17, Android SDK 35, Android Gradle Plugin 8.7.3 y Gradle 8.9. La exportación utiliza gifencoder 0.10.1 de Square (Apache 2.0), compatible con Android, y AndroidX Core 1.15.0 para compartir el GIF mediante FileProvider con acceso temporal de lectura. JUnit y Robolectric se utilizan únicamente para las pruebas y no se incluyen en el APK. La licencia de gifencoder se incluye en los assets de la app.
+Tecnología: Java 17, Android SDK 35, Android Gradle Plugin 8.7.3 y Gradle 8.9. La paleta de exportación utiliza el cuantizador de gifencoder 0.10.1 de Square (Apache 2.0), con muestreo limitado; la escritura GIF89a y la compresión LZW trabajan con índices de color y buffers reutilizables. AndroidX Core 1.15.0 comparte el archivo mediante FileProvider con acceso temporal de lectura. JUnit y Robolectric se utilizan únicamente para las pruebas y no se incluyen en el APK. La licencia de gifencoder se incluye en los assets de la app.
 
 ```powershell
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug

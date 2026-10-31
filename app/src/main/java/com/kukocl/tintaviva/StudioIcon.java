@@ -36,6 +36,40 @@ final class StudioIcon extends View {
         paint.setStyle(Paint.Style.STROKE);
         Path path = new Path();
         switch (kind) {
+            case "size":
+                path.moveTo(4, 5); path.lineTo(20, 5);
+                canvas.drawPath(path, paint);
+                path.reset();
+                paint.setStrokeWidth(4);
+                path.moveTo(4, 12); path.lineTo(20, 12);
+                canvas.drawPath(path, paint);
+                path.reset();
+                paint.setStrokeWidth(6);
+                path.moveTo(5, 20); path.lineTo(19, 20);
+                break;
+            case "eyedropper":
+                int pipette = canvas.save();
+                canvas.rotate(45, 12, 12);
+                path.moveTo(9.5f, 7); path.lineTo(9.5f, 5.5f);
+                path.arcTo(9.5f, 3, 14.5f, 8, 180, 180, false);
+                path.lineTo(14.5f, 7); path.close();
+                paint.setStyle(Paint.Style.FILL_AND_STROKE);
+                canvas.drawPath(path, paint);
+                path.reset();
+                paint.setStyle(Paint.Style.STROKE);
+                canvas.drawRoundRect(8.5f, 7, 15.5f, 9.5f, .8f, .8f, paint);
+                path.moveTo(10.5f, 9.5f); path.lineTo(10.5f, 16.5f);
+                path.lineTo(12, 19); path.lineTo(13.5f, 16.5f); path.lineTo(13.5f, 9.5f);
+                canvas.drawPath(path, paint);
+                canvas.restoreToCount(pipette);
+                path.reset();
+                paint.setStyle(Paint.Style.FILL);
+                path.moveTo(4.2f, 18.4f);
+                path.cubicTo(3.6f, 19.3f, 2.6f, 20.3f, 2.6f, 21);
+                path.arcTo(2.6f, 19.4f, 5.8f, 22.6f, 180, -180, false);
+                path.cubicTo(5.8f, 20.3f, 4.8f, 19.3f, 4.2f, 18.4f);
+                path.close();
+                break;
             case "menu":
                 paint.setStyle(Paint.Style.FILL);
                 path.addCircle(12, 5, 1.8f, Path.Direction.CW);

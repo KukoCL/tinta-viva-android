@@ -20,8 +20,8 @@ import android.view.View;
 import android.view.WindowInsets;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
+import android.widget.PopupWindow;
 import android.widget.ScrollView;
-import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -44,8 +44,10 @@ public final class MainActivity extends Activity {
     private DrawingView drawingView;
     private SharedPreferences preferences;
     private LinearLayout sketchCard, lineCard, onlyCard, brushButton, eraserButton, colorButton, undoButton;
-    private LinearLayout redoButton, motionButton, fileButton;
-    private TextView sizeValue;
+    private LinearLayout redoButton, motionButton, fileButton, sizeButton, eyedropperButton;
+    private LinearLayout root;
+    private BrushSizeControl sizeControl;
+    private PopupWindow sizePopup;
     private StudioIcon colorIcon;
     private int selectedColor;
     private int brushWidth;
@@ -69,7 +71,7 @@ public final class MainActivity extends Activity {
         erasing = preferences.getBoolean("eraser", false);
         document.setActiveLayer(preferences.getBoolean("lineArt", false) ? Layer.LINE_ART : Layer.SKETCH);
         if (preferences.getBoolean("lineArtOnly", false)) document.showOnlyLineArt();
-        LinearLayout root = vertical();
+        root = vertical();
         root.setBackgroundColor(BACKGROUND);
         root.setPadding(dp(8), 0, dp(8), 0);
         root.setOnApplyWindowInsetsListener((view, insets) -> {
@@ -91,7 +93,11 @@ public final class MainActivity extends Activity {
         drawingView.setBrushColor(selectedColor);
         drawingView.setBrushWidth(brushWidth);
         drawingView.setErasing(erasing);
-        drawingView.setStrongMotion(preferences.getBoolean("strongMotion", true));
+        drawingView.setColorPickListener(this::selectColor);
+        drawingView.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            if (sizeControl != null) sizeControl.setBrush(selectedColor, brushWidth);
+        });
+        drawingView.setStrongMotion(preferences.getBoolean("strongMotion", false));
         drawingView.setSketchImage(session.sketchImage);
         drawingView.setListener(() -> {
             updateControls();
@@ -107,7 +113,7 @@ public final class MainActivity extends Activity {
             LinearLayout panel = vertical();
             panel.setPadding(dp(8), dp(4), 0, dp(8));
             addLayers(panel);
-            addTools(panel);
+            addTools(panel, true);
             ScrollView scroll = new ScrollView(this);
             scroll.setFillViewport(true);
             scroll.addView(panel);
@@ -116,7 +122,7 @@ public final class MainActivity extends Activity {
         } else {
             addLayers(root);
             root.addView(drawingView, new LinearLayout.LayoutParams(-1, 0, 1));
-            addTools(root);
+            addTools(root, false);
         }
         setContentView(root);
         root.requestApplyInsets();
@@ -225,7 +231,9 @@ public final class MainActivity extends Activity {
         File gif = session.takePendingShare();
         if (gif == null) return;
         Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".exports", gif);
-        Intent share = new Intent(Intent.ACTION_SEND).setType("image/gif")
+        // Telegram routes image/* through its photo editor, which flattens shared GIFs.
+        // Send the original file; FileProvider still reports its actual image/gif type.
+        Intent share = new Intent(Intent.ACTION_SEND).setType("application/octet-stream")
                 .putExtra(Intent.EXTRA_STREAM, uri)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         share.setClipData(ClipData.newUri(getContentResolver(), "Tinta Viva", uri));
@@ -321,9 +329,9 @@ public final class MainActivity extends Activity {
         return card;
     }
 
-    private void addTools(LinearLayout parent) {
+    private void addTools(LinearLayout parent, boolean sidePanel) {
         LinearLayout tools = horizontal();
-        tools.setGravity(Gravity.CENTER_VERTICAL);
+        tools.setGravity(Gravity.CENTER);
         tools.setPadding(0, dp(4), 0, dp(4));
         brushButton = iconButton("brush", "Pincel");
         brushButton.setId(R.id.tool_brush);
@@ -332,34 +340,83 @@ public final class MainActivity extends Activity {
         colorButton = iconButton("palette", "Elegir color");
         colorButton.setId(R.id.tool_color);
         colorIcon = (StudioIcon) colorButton.getChildAt(0);
+        eyedropperButton = iconButton("eyedropper", "Tomar color del lienzo");
+        eyedropperButton.setId(R.id.tool_eyedropper);
         brushButton.setOnClickListener(view -> selectTool(false));
         eraserButton.setOnClickListener(view -> selectTool(true));
-        colorButton.setOnClickListener(view -> ColorPickerDialog.show(this, selectedColor, this::selectColor));
-        for (LinearLayout button : new LinearLayout[]{brushButton, eraserButton, colorButton}) {
+        colorButton.setOnClickListener(view -> {
+            drawingView.cancelPending();
+            ColorPickerDialog.show(this, selectedColor, this::selectColor);
+        });
+        eyedropperButton.setOnClickListener(view -> {
+            drawingView.setColorPicking(!drawingView.isColorPicking());
+            updateControls();
+        });
+        for (LinearLayout button : new LinearLayout[]{brushButton, eraserButton, colorButton, eyedropperButton}) {
             LinearLayout.LayoutParams buttonParams = params(48, 48);
-            buttonParams.rightMargin = dp(4);
+            if (button != brushButton) buttonParams.leftMargin = dp(4);
             tools.addView(button, buttonParams);
         }
-        SeekBar size = new SeekBar(this);
-        size.setMax(30);
-        size.setProgress(brushWidth - 2);
-        size.setContentDescription("Grosor del pincel, de 2 a 32");
-        size.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar seekBar, int value, boolean fromUser) {
-                if (!fromUser) return;
-                brushWidth = value + 2;
-                drawingView.setBrushWidth(brushWidth);
-                preferences.edit().putInt("width", brushWidth).apply();
-                sizeValue.setText(String.valueOf(brushWidth));
+        Configuration config = getResources().getConfiguration();
+        boolean phone = Math.min(config.screenWidthDp, config.screenHeightDp) < 600;
+        if (phone) {
+            sizeButton = iconButton("size", "Grosor del pincel");
+            sizeButton.setId(R.id.tool_brush_size);
+            sizeButton.setOnClickListener(view -> showBrushSizePanel(tools));
+            LinearLayout.LayoutParams sizeParams = params(48, 48);
+            sizeParams.leftMargin = dp(4);
+            tools.addView(sizeButton, sizeParams);
+        } else {
+            sizeControl = makeBrushSizeControl(true);
+            if (!sidePanel) {
+                LinearLayout.LayoutParams sizeParams = new LinearLayout.LayoutParams(0, -2, 1);
+                sizeParams.leftMargin = dp(4);
+                tools.addView(sizeControl, sizeParams);
             }
-            @Override public void onStartTrackingTouch(SeekBar bar) { }
-            @Override public void onStopTrackingTouch(SeekBar bar) { }
-        });
-        tools.addView(size, new LinearLayout.LayoutParams(0, dp(48), 1));
-        sizeValue = text(String.valueOf(brushWidth), 12, INK, true);
-        sizeValue.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        tools.addView(sizeValue, params(24, 48));
+        }
         parent.addView(tools, params(-1, -2));
+        if (!phone && sidePanel) parent.addView(sizeControl, params(-1, -2));
+    }
+
+    private BrushSizeControl makeBrushSizeControl(boolean floatingPreview) {
+        return new BrushSizeControl(this, session.viewport, selectedColor, brushWidth, floatingPreview, width -> {
+            brushWidth = width;
+            drawingView.setBrushWidth(width);
+            preferences.edit().putInt("width", width).apply();
+            updateBrushSize();
+        });
+    }
+
+    private void showBrushSizePanel(View anchor) {
+        if (sizePopup != null && sizePopup.isShowing()) return;
+        drawingView.cancelPending();
+        sizeControl = makeBrushSizeControl(false);
+        sizeControl.setPadding(dp(8), dp(8), dp(8), dp(8));
+        int width = root.getWidth() - root.getPaddingLeft() - root.getPaddingRight();
+        sizeControl.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        sizePopup = new PopupWindow(sizeControl, width, -2, true);
+        sizePopup.setBackgroundDrawable(background(BACKGROUND, 0xffb7cba7));
+        sizePopup.setElevation(dp(8));
+        sizePopup.setOutsideTouchable(true);
+        sizePopup.setInputMethodMode(PopupWindow.INPUT_METHOD_NOT_NEEDED);
+        sizePopup.setOnDismissListener(() -> {
+            sizeControl = null;
+            styleSelection(sizeButton, false);
+        });
+        int[] rootPosition = new int[2], anchorPosition = new int[2];
+        root.getLocationOnScreen(rootPosition);
+        anchor.getLocationOnScreen(anchorPosition);
+        sizePopup.showAsDropDown(anchor, rootPosition[0] + root.getPaddingLeft() - anchorPosition[0],
+                -anchor.getHeight() - sizeControl.getMeasuredHeight() - dp(8), Gravity.START);
+        styleSelection(sizeButton, true);
+    }
+
+    private void updateBrushSize() {
+        if (sizeControl != null) sizeControl.setBrush(selectedColor, brushWidth);
+        if (sizeButton != null) {
+            sizeButton.setContentDescription("Grosor del pincel: " + brushWidth + ". Abrir ajuste de grosor");
+        }
     }
 
     private LinearLayout iconButton(String icon, String label) {
@@ -383,6 +440,7 @@ public final class MainActivity extends Activity {
 
     private void selectTool(boolean eraser) {
         erasing = eraser;
+        drawingView.setColorPicking(false);
         drawingView.setErasing(eraser);
         preferences.edit().putBoolean("eraser", eraser).apply();
         updateControls();
@@ -400,13 +458,18 @@ public final class MainActivity extends Activity {
         styleSelection(sketchCard, !lineArt);
         styleSelection(lineCard, lineArt && !document.isLineArtOnly());
         styleSelection(onlyCard, document.isLineArtOnly());
-        styleSelection(brushButton, !erasing);
-        styleSelection(eraserButton, erasing);
+        boolean picking = drawingView.isColorPicking();
+        styleSelection(brushButton, !erasing && !picking);
+        styleSelection(eraserButton, erasing && !picking);
+        styleSelection(eyedropperButton, picking);
+        eyedropperButton.setContentDescription("Tomar color del lienzo" + (picking
+                ? ", seleccionado. Mantén pulsado y desliza sobre el lienzo; suelta para usar el color." : ""));
         sketchCard.setContentDescription("Capa sketch" + (!lineArt ? ", seleccionada" : ""));
         lineCard.setContentDescription("Capa line art, sketch al 30 por ciento" + (lineCard.isSelected() ? ", seleccionada" : ""));
         onlyCard.setContentDescription("Solo line art, sketch oculto" + (document.isLineArtOnly() ? ", seleccionado" : ""));
         colorIcon.setAccentColor(selectedColor);
         colorButton.setContentDescription("Elegir color. Color actual " + hex(selectedColor));
+        updateBrushSize();
         undoButton.setEnabled(document.canUndo());
         undoButton.setAlpha(document.canUndo() ? 1 : .35f);
         redoButton.setEnabled(document.canRedo());
@@ -466,6 +529,8 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onPause() {
+        if (sizeControl != null) sizeControl.dismissPreview();
+        if (sizePopup != null) sizePopup.dismiss();
         drawingView.setAnimationAllowed(false);
         session.saveDocument();
         session.store.setErrorListener(null);
@@ -474,6 +539,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (sizePopup != null) sizePopup.dismiss();
         if (newDrawingDialog != null) newDrawingDialog.dismiss();
         if (motionMenu != null) motionMenu.dismiss();
         if (fileMenu != null) fileMenu.dismiss();

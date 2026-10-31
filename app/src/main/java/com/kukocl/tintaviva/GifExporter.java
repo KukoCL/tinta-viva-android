@@ -7,15 +7,12 @@ import android.graphics.Color;
 import com.kukocl.tintaviva.core.DrawingDocument;
 import com.kukocl.tintaviva.core.LineAnimation;
 import com.kukocl.tintaviva.core.Stroke;
-import com.squareup.gifencoder.GifEncoder;
-import com.squareup.gifencoder.ImageOptions;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /** Exports a frozen document, independent of the editor's zoom, controls and later edits. */
 final class GifExporter {
@@ -40,10 +37,12 @@ final class GifExporter {
     }
 
     static void write(OutputStream output, Snapshot snapshot, int width, int height) throws IOException {
-        GifEncoder encoder = new GifEncoder(output, width, height, 0);
         Bitmap image = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         int[] pixels = new int[width * height];
+        byte[] indices = new byte[pixels.length];
         DrawingRenderer renderer = new DrawingRenderer();
+        GifPalette palette = null;
+        IndexedGifEncoder encoder = null;
         try {
             for (int frame = 0; frame < LineAnimation.FRAME_COUNT; frame++) {
                 image.eraseColor(Color.WHITE);
@@ -52,13 +51,16 @@ final class GifExporter {
                 renderer.draw(canvas, snapshot.strokes, snapshot.sketchImage, snapshot.sketchOpacity,
                         snapshot.strongMotion, frame);
                 image.getPixels(pixels, 0, width, 0, 0, width, height);
+                if (palette == null) {
+                    palette = new GifPalette(pixels);
+                    encoder = new IndexedGifEncoder(output, width, height, palette.colors);
+                }
+                palette.index(pixels, indices);
                 // GIF stores hundredths of a second: alternate 12/13 to preserve a one-second loop.
-                ImageOptions options = new ImageOptions().setDelay(frame % 2 == 0 ? 120 : 130,
-                        TimeUnit.MILLISECONDS);
-                encoder.addImage(pixels, width, options);
+                encoder.addFrame(indices, frame % 2 == 0 ? 12 : 13);
                 renderer.clear();
             }
-            encoder.finishEncoding();
+            encoder.finish();
         } finally {
             image.recycle();
         }

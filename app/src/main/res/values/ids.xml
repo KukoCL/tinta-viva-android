@@ -16,4 +16,9 @@
     <item name="tool_brush" type="id" />
     <item name="tool_eraser" type="id" />
     <item name="tool_color" type="id" />
+    <item name="tool_eyedropper" type="id" />
+    <item name="tool_brush_size" type="id" />
+    <item name="brush_size_control" type="id" />
+    <item name="brush_size_preview" type="id" />
+    <item name="brush_size_slider" type="id" />
 </resources>

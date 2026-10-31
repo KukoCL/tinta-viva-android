@@ -20,6 +20,7 @@ import com.kukocl.tintaviva.core.StrokeBuilder;
 
 public final class DrawingView extends View {
     public interface Listener { void onDrawingChanged(); }
+    public interface ColorPickListener { void onColorPicked(int color); }
     private final DrawingDocument document;
     private final CanvasViewport viewport;
     private final ScaleGestureDetector scaleDetector;
@@ -30,6 +31,12 @@ public final class DrawingView extends View {
     private Bitmap sketchImage;
     private final Runnable animate = this::invalidate;
     private Listener listener;
+    private ColorPickListener colorPickListener;
+    private boolean colorPicking, sampledColorValid;
+    private int sampledColor;
+    private float sampleX, sampleY;
+    private Bitmap samplePixel;
+    private Canvas sampleCanvas;
     private StrokeBuilder pending;
     private int activePointer = -1;
     private boolean erasing;
@@ -60,15 +67,29 @@ public final class DrawingView extends View {
         scaleDetector.setQuickScaleEnabled(false);
         scaleDetector.setStylusScaleEnabled(false);
         setFocusable(true);
-        setContentDescription("Lienzo de dibujo. Dibuja con el dedo o con un lápiz. "
-                + "Pellizca con dos dedos para ampliar y desplázalos para mover el lienzo. "
-                + "En modo goma, toca y suelta un trazo para borrarlo entero de la capa seleccionada.");
+        updateContentDescription();
         paint.setStrokeCap(Paint.Cap.ROUND);
         paint.setStrokeJoin(Paint.Join.ROUND);
         setLayerType(View.LAYER_TYPE_HARDWARE, null);
     }
 
     public void setListener(Listener listener) { this.listener = listener; }
+    public void setColorPickListener(ColorPickListener listener) { colorPickListener = listener; }
+    public boolean isColorPicking() { return colorPicking; }
+    public void setColorPicking(boolean enabled) {
+        cancelPending();
+        colorPicking = enabled;
+        updateContentDescription();
+    }
+
+    private void updateContentDescription() {
+        setContentDescription(colorPicking
+                ? "Lienzo. Mantén pulsado y desliza para tomar un color. El círculo sobre el dedo "
+                    + "muestra la selección; suelta para usarla."
+                : "Lienzo de dibujo. Dibuja con el dedo o con un lápiz. "
+                    + "Pellizca con dos dedos para ampliar y desplázalos para mover el lienzo. "
+                    + "En modo goma, toca y suelta un trazo para borrarlo entero de la capa seleccionada.");
+    }
     public void setBrushColor(int color) { brushColor = color; }
     public void setBrushWidth(float width) { brushWidth = width; }
     public void setSketchImage(Bitmap image) { sketchImage = image; invalidate(); }
@@ -101,7 +122,8 @@ public final class DrawingView extends View {
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         paper.set(viewport.getLeft(), viewport.getTop(), viewport.getRight(), viewport.getBottom());
-        displayedFrame = LineAnimation.frameAt(SystemClock.uptimeMillis());
+        // Keep the sampled animation frame still while the finger is choosing its color.
+        if (!colorPicking || !gestureActive) displayedFrame = LineAnimation.frameAt(SystemClock.uptimeMillis());
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(Color.WHITE);
         paint.setAlpha(255);
@@ -135,8 +157,9 @@ public final class DrawingView extends View {
         paint.setColor(Color.rgb(224, 226, 217));
         paint.setAlpha(255);
         canvas.drawRoundRect(paper, dp(3), dp(3), paint);
+        if (colorPicking && sampledColorValid) drawColorSample(canvas);
         removeCallbacks(animate);
-        if (animationAllowed && isShown() && document.hasAnimatedStrokes()) {
+        if (animationAllowed && isShown() && document.hasAnimatedStrokes() && !(colorPicking && gestureActive)) {
             long delay = LineAnimation.FRAME_MS - SystemClock.uptimeMillis() % LineAnimation.FRAME_MS;
             postDelayed(animate, delay);
         }
@@ -163,6 +186,7 @@ public final class DrawingView extends View {
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {
+        if (colorPicking) return pickColor(event);
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
             cancelPending();
@@ -242,6 +266,85 @@ public final class DrawingView extends View {
         return true;
     }
 
+    private boolean pickColor(MotionEvent event) {
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            cancelPending();
+            gestureActive = true;
+            activePointer = event.getPointerId(0);
+            disallowParentInterception(true);
+        }
+        if (!gestureActive) return true;
+        if (action == MotionEvent.ACTION_CANCEL) {
+            cancelPending();
+            return true;
+        }
+        if (action == MotionEvent.ACTION_POINTER_DOWN) {
+            // A second finger cancels selection until the whole gesture has ended.
+            navigating = true;
+            sampledColorValid = false;
+            invalidate();
+        }
+        int index = event.findPointerIndex(activePointer);
+        if (index < 0) { cancelPending(); return true; }
+        if (!navigating && (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE
+                || action == MotionEvent.ACTION_UP)) {
+            sampleColor(event.getX(index), event.getY(index));
+        }
+        if (action == MotionEvent.ACTION_UP) {
+            boolean selected = sampledColorValid && !navigating;
+            int color = sampledColor;
+            cancelPending();
+            performClick();
+            if (selected && colorPickListener != null) colorPickListener.onColorPicked(color);
+        }
+        return true;
+    }
+
+    private void sampleColor(float x, float y) {
+        sampleX = x;
+        sampleY = y;
+        sampledColorValid = x >= 0 && y >= 0 && x < getWidth() && y < getHeight() && viewport.contains(x, y);
+        if (sampledColorValid) {
+            if (samplePixel == null) {
+                samplePixel = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+                sampleCanvas = new Canvas(samplePixel);
+            }
+            // Render only the pixel beneath the finger, without editor text or the preview bubble.
+            sampleCanvas.drawColor(Color.WHITE);
+            int saved = sampleCanvas.save();
+            sampleCanvas.translate(viewport.getLeft() - (float) Math.floor(x),
+                    viewport.getTop() - (float) Math.floor(y));
+            sampleCanvas.scale(viewport.getScale(), viewport.getScale());
+            renderer.draw(sampleCanvas, document.getStrokes(), sketchImage, document.sketchOpacity(),
+                    document.isStrongMotion(), displayedFrame);
+            sampleCanvas.restoreToCount(saved);
+            sampledColor = samplePixel.getPixel(0, 0);
+        }
+        invalidate();
+    }
+
+    private void drawColorSample(Canvas canvas) {
+        float radius = dp(24), margin = radius + dp(4);
+        float x = Math.max(margin, Math.min(getWidth() - margin, sampleX));
+        float y = Math.max(margin, Math.min(getHeight() - margin, sampleY - dp(64)));
+        paint.setAlpha(255);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(sampledColor);
+        canvas.drawCircle(x, y, radius, paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(dp(4));
+        paint.setColor(Color.WHITE);
+        canvas.drawCircle(x, y, radius, paint);
+        paint.setStrokeWidth(dp(1));
+        paint.setColor(0xff20382f);
+        canvas.drawCircle(x, y, radius + dp(2), paint);
+        canvas.drawCircle(sampleX, sampleY, dp(7), paint);
+        paint.setStrokeWidth(dp(2));
+        paint.setColor(Color.WHITE);
+        canvas.drawCircle(sampleX, sampleY, dp(5), paint);
+    }
+
     private void addInput(float x, float y) {
         // Clamp a gesture crossing the paper edge so it can return without corrupting the document.
         pending.add(Math.max(0, Math.min(DrawingDocument.WIDTH, toX(x))),
@@ -270,6 +373,13 @@ public final class DrawingView extends View {
         gestureActive = false;
         navigating = false;
         gestureErasing = false;
+        sampledColorValid = false;
+        if (samplePixel != null) {
+            sampleCanvas.setBitmap(null);
+            samplePixel.recycle();
+            samplePixel = null;
+            sampleCanvas = null;
+        }
         disallowParentInterception(false);
         invalidate();
     }
@@ -280,6 +390,7 @@ public final class DrawingView extends View {
 
     @Override public boolean performClick() { super.performClick(); return true; }
     @Override protected void onDetachedFromWindow() {
+        cancelPending();
         removeCallbacks(animate);
         super.onDetachedFromWindow();
     }
